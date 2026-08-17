@@ -29,10 +29,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('quiz-user');
   };
 
-  const checkGumroadPurchase = async () => true;
-
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, checkGumroadPurchase, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, register, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
