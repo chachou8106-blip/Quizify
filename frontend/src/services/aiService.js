@@ -1,20 +1,18 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-
 const MUSIC_QUIZ_PROMPTS = {
   fr: {
     multipleChoice: (t,c) => `Génère EXACTEMENT ${c} questions à choix multiples en français sur la musique. Réponds UNIQUEMENT avec un tableau JSON: [{"question":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"théorie|histoire|instruments"}]. Texte: ${t}`,
     trueFalse: (t,c) => `Génère EXACTEMENT ${c} affirmations Vrai/Faux en français. Format JSON: [{"statement":"...","answer":true/false,"explanation":"...","category":"théorie|histoire|instruments"}]. Texte: ${t}`,
     fillBlank: (t,c) => `Crée EXACTEMENT ${c} phrases à trous en français. Format JSON: [{"sentence":"...___...","answer":"...","category":"théorie|histoire|instruments"}]. Texte: ${t}`,
-    audioRecognition: (t,c) => `Génère EXACTEMENT ${c} questions de reconnaissance auditive en français. Format JSON: [{"question":"...","audioDescription":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"instruments"}]. Contexte: ${t}`
+    audioRecognition: (t,c) => `Génère EXACTEMENT ${c} questions de reconnaissance auditive. Format JSON: [{"question":"...","audioDescription":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"instruments"}]. Contexte: ${t}`
   },
   en: {
-    multipleChoice: (t,c) => `Generate EXACTLY ${c} multiple-choice questions in English about music. ONLY valid JSON: [{"question":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"theory|history|instruments"}]. Text: ${t}`,
-    trueFalse: (t,c) => `Generate EXACTLY ${c} True/False statements in English. Format JSON: [{"statement":"...","answer":true/false,"explanation":"...","category":"theory|history|instruments"}]. Text: ${t}`,
-    fillBlank: (t,c) => `Create EXACTLY ${c} fill-in-the-blank sentences in English. Format JSON: [{"sentence":"...___...","answer":"...","category":"theory|history|instruments"}]. Text: ${t}`,
-    audioRecognition: (t,c) => `Generate EXACTLY ${c} audio recognition questions in English. Format JSON: [{"question":"...","audioDescription":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"instruments"}]. Context: ${t}`
+    multipleChoice: (t,c) => `Generate EXACTLY ${c} multiple-choice questions in English. ONLY valid JSON: [{"question":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"theory|history|instruments"}]. Text: ${t}`,
+    trueFalse: (t,c) => `Generate EXACTLY ${c} True/False statements. Format JSON: [{"statement":"...","answer":true/false,"explanation":"...","category":"theory|history|instruments"}]. Text: ${t}`,
+    fillBlank: (t,c) => `Create EXACTLY ${c} fill-in-the-blank sentences. Format JSON: [{"sentence":"...___...","answer":"...","category":"theory|history|instruments"}]. Text: ${t}`,
+    audioRecognition: (t,c) => `Generate EXACTLY ${c} audio recognition questions. Format JSON: [{"question":"...","audioDescription":"...","options":["a","b","c","d"],"answer":"...","explanation":"...","category":"instruments"}]. Context: ${t}`
   }
 };
-
 export async function generateQuiz({ text, type = 'multipleChoice', count = 5, language = 'fr' }) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) throw new Error('API key not configured');
@@ -38,16 +36,13 @@ export async function generateQuiz({ text, type = 'multipleChoice', count = 5, l
     return { success: true, quiz: { questions: getDefaultQuestions(type, language), type, count, language } };
   }
 }
-
 function getDefaultQuestions(type, language) {
   const defaults = {
     fr: {
-      multipleChoice: [{ question: 'Quel compositeur a écrit la Symphonie n°5 ?', options: ['Mozart', 'Beethoven', 'Bach', 'Chopin'], answer: 'Beethoven', explanation: 'La Symphonie n°5 a été composée par Beethoven.', category: 'histoire' }],
-      trueFalse: [{ statement: 'Le piano est un instrument à cordes.', answer: true, explanation: 'Le piano est classé comme instrument à cordes frappées.', category: 'instruments' }]
+      multipleChoice: [{ question: 'Quel compositeur a écrit la Symphonie n°5 ?', options: ['Mozart', 'Beethoven', 'Bach', 'Chopin'], answer: 'Beethoven', explanation: 'La Symphonie n°5 a été composée par Beethoven en 1808.', category: 'histoire' }]
     },
     en: {
-      multipleChoice: [{ question: 'Who composed Symphony No. 5?', options: ['Mozart', 'Beethoven', 'Bach', 'Chopin'], answer: 'Beethoven', explanation: 'Symphony No. 5 was composed by Beethoven.', category: 'history' }],
-      trueFalse: [{ statement: 'The piano is a string instrument.', answer: true, explanation: 'The piano is a keyboard instrument with struck strings.', category: 'instruments' }]
+      multipleChoice: [{ question: 'Who composed Symphony No. 5?', options: ['Mozart', 'Beethoven', 'Bach', 'Chopin'], answer: 'Beethoven', explanation: 'Symphony No. 5 was composed by Beethoven in 1808.', category: 'history' }]
     }
   };
   return defaults[language]?.[type] || defaults.fr.multipleChoice;
