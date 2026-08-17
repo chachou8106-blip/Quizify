@@ -1,0 +1,8 @@
+import { Link } from "react-router-dom";
+import { useLanguage } from "../hooks/useLanguage";
+import { getAllCategories } from "../services/categoryService";
+export default function Categories() {
+  const { t, language } = useLanguage();
+  const categories = getAllCategories();
+  return (<div className="max-w-6xl mx-auto p-6"><section className="text-center py-12"><h1 className="text-4xl font-bold mb-4">All Categories</h1><p className="text-xl mb-8">Choose your favorite topic</p><div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 rounded-xl text-white mb-12"><h2 className="text-2xl font-bold mb-2">Unlimited Access</h2><p className="mb-4">Access all 10 categories</p><Link to="/pricing" className="bg-white text-purple-600 px-8 py-3 rounded-lg font-semibold">Subscribe - 29.99/month</Link></div></section><section className="py-8"><h2 className="text-2xl font-bold text-center mb-8">Explore Categories</h2><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">{categories.map((cat) => (<Link key={cat.id} to={`/category/${cat.id}`} className="block p-6 rounded-xl shadow-lg hover:shadow-xl" style={{backgroundColor: cat.color + "20", border: `2px solid ${cat.color}`}}><div className="text-center"><div className="text-5xl mb-4">{cat.icon}</div><h3 className="text-xl font-bold mb-2">{cat.name[language]}</h3><p className="text-sm text-gray-600 mb-4">{cat.description[language]}</p><button className="mt-4 w-full bg-white py-2 rounded-lg">Explore</button></div></Link>))}</div></section><section className="text-center py-12"><Link to="/create" className="bg-purple-600 text-white px-8 py-4 rounded-lg text-lg">Create Your Quiz</Link></section></div>);
+}
