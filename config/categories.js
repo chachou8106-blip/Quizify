@@ -4,7 +4,7 @@
  */
 
 export const CATEGORIES = {
-  // 1. Musique (Premium - déjà existant)
+  // 1. Musique (Premium)
   music: {
     id: 'music',
     name: { fr: 'Musique', en: 'Music' },
