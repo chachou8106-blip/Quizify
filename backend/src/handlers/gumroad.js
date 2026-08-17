@@ -8,8 +8,8 @@ export async function handleGumroadRequest(request, env) {
   if (path === '/api/gumroad/verify' && request.method === 'POST') {
     try {
       const { email, productId } = await request.json();
-      if (!email || !productId) return new Response(JSON.stringify({ error: 'email and productId are required' }), { status: 400, headers: corsHeaders });
-      return new Response(JSON.stringify({ success: true, isValid: true, message: 'Demo mode - all purchases are valid' }), { status: 200, headers: corsHeaders });
+      if (!email || !productId) return new Response(JSON.stringify({ error: 'email and productId required' }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ success: true, isValid: true, message: 'Demo mode - all purchases valid' }), { status: 200, headers: corsHeaders });
     } catch (error) {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: corsHeaders });
     }

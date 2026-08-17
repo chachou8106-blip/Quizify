@@ -5,12 +5,12 @@ const corsHeaders = {
 export async function handleQuizRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const { searchParams } = url;
+  const searchParams = url.searchParams;
   if (path === '/api/quizzes' && request.method === 'GET') {
     try {
       const userId = searchParams.get('userId');
       const email = searchParams.get('email');
-      if (!userId && !email) return new Response(JSON.stringify({ error: 'userId or email is required' }), { status: 400, headers: corsHeaders });
+      if (!userId && !email) return new Response(JSON.stringify({ error: 'userId or email required' }), { status: 400, headers: corsHeaders });
       const keys = await env.QUIZZES.list();
       const userPrefix = userId ? `user:${userId}:` : `email:${email}:`;
       const userQuizzes = [];
@@ -28,8 +28,8 @@ export async function handleQuizRequest(request, env) {
   if (path === '/api/quizzes' && request.method === 'POST') {
     try {
       const { quiz, userId, email } = await request.json();
-      if (!quiz) return new Response(JSON.stringify({ error: 'quiz is required' }), { status: 400, headers: corsHeaders });
-      if (!userId && !email) return new Response(JSON.stringify({ error: 'userId or email is required' }), { status: 400, headers: corsHeaders });
+      if (!quiz) return new Response(JSON.stringify({ error: 'quiz required' }), { status: 400, headers: corsHeaders });
+      if (!userId && !email) return new Response(JSON.stringify({ error: 'userId or email required' }), { status: 400, headers: corsHeaders });
       const quizId = generateId();
       const prefix = userId ? `user:${userId}:` : `email:${email}:`;
       const key = `${prefix}quiz:${quizId}`;
