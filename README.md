@@ -1,2 +1,2 @@
-# Quizify
-Quiz musical 
+# QuizifyMusic
+AI-powered music quiz generator
