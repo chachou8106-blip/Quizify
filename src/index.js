@@ -7,7 +7,26 @@ import { activateLicense, reverifyAll } from './gumroad';
 export { GameRoom } from './GameRoom';
 
 const app = new Hono();
-const secret = (c) => c.env.AUTH_SECRET || 'dev-secret-change-me';
+
+// Session secret: env var if set, else stored in D1 (auto-generated on first run).
+let cachedSecret = null;
+async function getSecret(env) {
+  if (env.AUTH_SECRET) return env.AUTH_SECRET;
+  if (cachedSecret) return cachedSecret;
+  try {
+    const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'AUTH_SECRET'").first();
+    if (row?.value) { cachedSecret = row.value; return cachedSecret; }
+  } catch { /* table may not exist yet */ }
+  try {
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)').run();
+    await env.DB.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('AUTH_SECRET', ?)").bind(randomHex(32)).run();
+    const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'AUTH_SECRET'").first();
+    cachedSecret = row?.value || null;
+    if (cachedSecret) return cachedSecret;
+  } catch { /* fall through */ }
+  return 'dev-secret-change-me';
+}
+const secret = (c) => getSecret(c.env);
 const auth = requireAuth(secret);
 
 const FREE_AI_PER_MONTH = 3;
@@ -59,7 +78,7 @@ app.post('/api/auth/signup', async (c) => {
   const hash = await hashPassword(password, salt);
   await c.env.DB.prepare('INSERT INTO users (id, email, name, pass_hash, salt) VALUES (?,?,?,?,?)')
     .bind(id, em, String(name).trim().slice(0, 40), hash, salt).run();
-  const token = await signJWT({ id, email: em, name: String(name).trim().slice(0, 40) }, secret(c));
+  const token = await signJWT({ id, email: em, name: String(name).trim().slice(0, 40) }, await secret(c));
   return c.json({ token, user: { id, email: em, name, plan: 'free' } }, 201);
 });
 
@@ -71,7 +90,7 @@ app.post('/api/auth/login', async (c) => {
   if (!u) return c.json({ error: 'Email ou mot de passe incorrect' }, 401);
   const hash = await hashPassword(password, u.salt);
   if (hash !== u.pass_hash) return c.json({ error: 'Email ou mot de passe incorrect' }, 401);
-  const token = await signJWT({ id: u.id, email: u.email, name: u.name }, secret(c));
+  const token = await signJWT({ id: u.id, email: u.email, name: u.name }, await secret(c));
   const plan = await getPlan(c, u.id);
   return c.json({ token, user: { id: u.id, email: u.email, name: u.name, plan } });
 });
@@ -204,7 +223,7 @@ app.get('/api/music/preview/dz/:id', async (c) => {
 
 // Diagnostic sources musicales (protégé)
 app.get('/api/music/debug', async (c) => {
-  if (c.req.query('key') !== secret(c)) return c.json({ error: 'forbidden' }, 403);
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const term = c.req.query('q') || 'queen';
   const [deezer, itunes] = await Promise.all([fetchTracksDeezer(term, 5), fetchTracksItunes(term, 5)]);
   return c.json({
@@ -390,7 +409,7 @@ app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Qui
 
 // Protected self-test: verifies AI, D1 and KV in production. GET /api/selftest?key=<AUTH_SECRET>
 app.get('/api/selftest', async (c) => {
-  if (c.req.query('key') !== secret(c)) return c.json({ error: 'forbidden' }, 403);
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const out = {};
   try {
     const r = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first();
@@ -407,7 +426,7 @@ app.get('/api/selftest', async (c) => {
     });
     out.ai = { ok: true, sample: questions[0]?.question, count: questions.length };
   } catch (e) { out.ai = { ok: false, error: e.message }; }
-  out.authSecretConfigured = !!c.env.AUTH_SECRET;
+  out.secretSource = c.env.AUTH_SECRET ? 'env' : (cachedSecret ? 'd1' : 'fallback');
   return c.json(out);
 });
 

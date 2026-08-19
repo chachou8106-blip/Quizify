@@ -60,11 +60,12 @@ export async function verifyJWT(token, secret) {
 }
 
 // Hono middleware: attaches c.get('user') = {id, email, name} or 401s.
-export function requireAuth(secret) {
+// `getSecret` is an async (c) => string resolver.
+export function requireAuth(getSecret) {
   return async (c, next) => {
     const h = c.req.header('Authorization') || '';
     const token = h.startsWith('Bearer ') ? h.slice(7) : null;
-    const payload = token ? await verifyJWT(token, secret(c)) : null;
+    const payload = token ? await verifyJWT(token, await getSecret(c)) : null;
     if (!payload) return c.json({ error: 'Non connecté' }, 401);
     c.set('user', payload);
     await next();
