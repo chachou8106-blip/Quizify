@@ -46,6 +46,18 @@ Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, au format :
 [{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]`;
 }
 
+function extractText(res) {
+  if (typeof res === 'string') return res;
+  if (typeof res?.response === 'string') return res.response;
+  if (typeof res?.result === 'string') return res.result;
+  const c = res?.choices?.[0];
+  if (typeof c?.message?.content === 'string') return c.message.content;
+  if (typeof c?.text === 'string') return c.text;
+  // Some models return an already-parsed object/array
+  if (res?.response && typeof res.response === 'object') return JSON.stringify(res.response);
+  return JSON.stringify(res ?? '');
+}
+
 function extractJSON(text) {
   // Strip code fences, find outermost array
   const cleaned = text.replace(/```(?:json)?/g, '');
@@ -98,7 +110,7 @@ export async function generateQuestions(env, opts) {
         max_tokens: 4096,
         temperature: attempt === 0 ? 0.7 : 0.4,
       });
-      const text = typeof res === 'string' ? res : res.response || res.result || '';
+      const text = extractText(res);
       const questions = normalize(extractJSON(text), opts.type);
       return questions.slice(0, count);
     } catch (e) {
