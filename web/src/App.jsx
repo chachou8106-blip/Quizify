@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import Nav from './components/Nav';
+import Footer from './components/Footer';
 import Home from './pages/Home';
 import Create from './pages/Create';
 import Birthday from './pages/Birthday';
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -68,11 +68,11 @@ export default function Birthday() {
 
       <div className="card space-y-5">
         <div>
-          <label className="mb-2 block font-display font-extrabold">Prénom de la star 🎉</label>
+          <h2 className="mb-2 font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-grape px-3 py-0.5 text-white">1</span>Prénom de la star 🎉</h2>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Léa" className="input" />
         </div>
         <div>
-          <label className="mb-2 block font-display font-extrabold">Anecdotes, goûts, souvenirs, manies…</label>
+          <h2 className="mb-2 font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>Anecdotes, goûts, souvenirs, manies…</h2>
           <textarea
             value={facts}
             onChange={(e) => setFacts(e.target.value)}
@@ -81,7 +81,7 @@ export default function Birthday() {
           />
         </div>
         <div>
-          <label className="mb-2 block font-display font-extrabold">Nombre de questions</label>
+          <h2 className="mb-2 font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Nombre de questions</h2>
           <select value={count} onChange={(e) => setCount(+e.target.value)} className="input sm:w-40">
             {[5, 8, 10, 12, 15].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>

@@ -47,9 +47,9 @@ export default function Home() {
       {/* Features */}
       <section className="grid gap-5 sm:grid-cols-3">
         {[
-          ['🎧', 'Blind test avec de la VRAIE musique', 'Extraits de 30 secondes de tes artistes préférés : qui reconnaît le morceau en premier ?'],
-          ['🤖', 'IA sur tous les sujets', "18 catégories, devinettes emoji, « Qui suis-je ? »… L'IA écrit les questions ET les explications."],
-          ['📱', 'Mode fête en direct', 'Un code PIN, tout le monde joue sur son téléphone, classement en temps réel façon jeu télévisé.'],
+          ['🎧', 'Blind test avec de la VRAIE musique', 'Extraits de 15 secondes de tes artistes préférés : qui reconnaît le morceau en premier ?'],
+          ['🤖', 'IA sur tous les sujets', "26 catégories ou sujet 100 % libre, 11 styles de jeu (emoji, intrus, citations…). L'IA écrit les questions ET les explications."],
+          ['📱', 'Mode fête en direct', 'Un code PIN, tout le monde joue sur son téléphone : points à la vitesse, séries 🔥, podium à confettis.'],
         ].map(([emoji, title, desc]) => (
           <div key={title} className="card text-center">
             <div className="text-5xl">{emoji}</div>
@@ -57,6 +57,24 @@ export default function Home() {
             <p className="mt-2 font-semibold text-slate-500">{desc}</p>
           </div>
         ))}
+      </section>
+
+      {/* Comment ça marche */}
+      <section>
+        <h2 className="text-center font-display text-3xl font-extrabold">Comment ça marche ?</h2>
+        <div className="mt-6 grid gap-5 sm:grid-cols-3">
+          {[
+            ['bg-grape', '1', 'Crée en 30 secondes', 'Un sujet, un style de jeu, et l\'IA (ou la vraie musique) fait le reste.'],
+            ['bg-bubble', '2', 'Partage le code PIN', 'Tes invités le tapent sur leur téléphone. Aucun compte, aucune appli à installer.'],
+            ['bg-sky2', '3', 'Que le meilleur gagne !', 'Réponses chronométrées, bonus de série, classement en direct et podium à confettis.'],
+          ].map(([color, n, title, desc]) => (
+            <div key={n} className="card text-center">
+              <span className={`${color} mx-auto flex h-12 w-12 items-center justify-center rounded-full font-display text-2xl font-extrabold text-white`}>{n}</span>
+              <h3 className="mt-3 font-display text-xl font-extrabold">{title}</h3>
+              <p className="mt-2 font-semibold text-slate-500">{desc}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* Birthday CTA */}
