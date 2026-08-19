@@ -1,4 +1,4 @@
-name = "quizzalo"
+name = "quizify"  # identifiant technique du Worker (invisible) — la marque publique est Quizzalo
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
