@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quizify — Kit de marque</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --grape:#7C3AED; --bubble:#EC4899; --sunny:#FBBF24; --minty:#10B981; --sky:#06B6D4; --cherry:#EF4444; --cream:#FFF9F0; --ink:#1E293B; }
+  * { margin:0; box-sizing:border-box; }
+  body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--ink); padding:32px 20px 80px;
+    background-image: radial-gradient(circle at 10% 5%, rgba(167,139,250,.15) 0, transparent 30%), radial-gradient(circle at 90% 15%, rgba(249,168,212,.18) 0, transparent 28%); }
+  h1,h2,h3 { font-family:'Baloo 2',sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; }
+  .card { background:#fff; border-radius:28px; padding:28px; margin-top:24px; box-shadow:0 10px 30px rgba(124,58,237,.10); }
+  .hero { text-align:center; padding:20px 0 8px; }
+  .hero h1 { font-size:44px; background:linear-gradient(90deg,var(--grape),var(--bubble)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .slogan { font-size:22px; font-weight:800; margin-top:6px; }
+  .sub { color:#64748B; font-weight:600; margin-top:6px; }
+  .logo { width:110px; height:110px; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:14px; }
+  .sw { border-radius:20px; padding:18px 14px; color:#fff; font-weight:800; min-height:110px; display:flex; flex-direction:column; justify-content:space-between; }
+  .sw small { font-weight:700; opacity:.85; font-family:monospace; }
+  .type-demo p { margin-top:8px; }
+  .pill { display:inline-block; background:rgba(124,58,237,.1); color:var(--grape); border-radius:999px; padding:6px 14px; font-weight:800; margin:4px 4px 0 0; }
+  .voice li { margin:8px 0 0 18px; font-weight:600; }
+  .logos { display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+  .logobox { border-radius:20px; padding:22px; display:flex; align-items:center; gap:12px; }
+  .dark { background:#1E1B4B; } .light { background:#F1F5F9; }
+  .wordmark { font-family:'Baloo 2'; font-weight:800; font-size:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <svg class="logo" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C3AED"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#g)"/><circle cx="30" cy="29" r="13" fill="none" stroke="#fff" stroke-width="7"/><line x1="37" y1="36" x2="46" y2="45" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M49 8 l2.6 5.3 5.8 .85 -4.2 4.1 1 5.75 -5.2 -2.75 -5.2 2.75 1 -5.75 -4.2 -4.1 5.8 -.85 z" fill="#FBBF24"/><circle cx="14" cy="50" r="3" fill="#FDE68A"/></svg>
+    <h1>Quizify</h1>
+    <p class="slogan">« La fête commence par une question ✨ »</p>
+    <p class="sub">Kit de marque officiel — version 1.0 · août 2026</p>
+  </div>
+
+  <div class="card">
+    <h2>🎨 Palette « Confetti »</h2>
+    <p class="sub">Des couleurs joviales et saturées, lisibles par toute la famille. Le violet Grape est la couleur maîtresse ; le rose Bubble l'accompagne dans le dégradé signature.</p>
+    <br>
+    <div class="swatches">
+      <div class="sw" style="background:#7C3AED">Grape<br><small>#7C3AED</small></div>
+      <div class="sw" style="background:#EC4899">Bubble<br><small>#EC4899</small></div>
+      <div class="sw" style="background:#FBBF24; color:#1E293B">Sunny<br><small>#FBBF24</small></div>
+      <div class="sw" style="background:#10B981">Minty<br><small>#10B981</small></div>
+      <div class="sw" style="background:#06B6D4">Sky<br><small>#06B6D4</small></div>
+      <div class="sw" style="background:#EF4444">Cherry<br><small>#EF4444</small></div>
+      <div class="sw" style="background:#FFF9F0; color:#1E293B; border:2px solid #E2E8F0">Cream (fond)<br><small>#FFF9F0</small></div>
+      <div class="sw" style="background:#1E293B">Ink (texte)<br><small>#1E293B</small></div>
+    </div>
+    <p style="margin-top:14px; font-weight:600; color:#64748B">Dégradé signature : <b style="background:linear-gradient(90deg,#7C3AED,#EC4899); -webkit-background-clip:text; background-clip:text; color:transparent">Grape → Bubble (45°)</b> — réservé au logo, aux titres héros et aux boutons principaux. Les 4 couleurs de réponses (Cherry, Sky, Sunny, Minty) sont celles des boutons de jeu.</p>
+  </div>
+
+  <div class="card">
+    <h2>🔤 Typographies</h2>
+    <div class="type-demo">
+      <p style="font-family:'Baloo 2'; font-size:30px; font-weight:800">Baloo 2 — Titres, boutons, scores</p>
+      <p style="font-size:18px; font-weight:600">Nunito — Textes courants, descriptions, options de réponse. Ronde, chaleureuse, très lisible sur mobile.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🪩 Logo</h2>
+    <p class="sub">Le « Q-loupe étoilée » : un Q blanc audacieux sur badge dégradé, avec l'étincelle Sunny — curiosité + fête. Fonctionne en favicon, avatar et affiche.</p>
+    <br>
+    <div class="logos">
+      <div class="logobox light"><svg width="54" height="54" viewBox="0 0 64 64"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C3AED"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#g2)"/><circle cx="30" cy="29" r="13" fill="none" stroke="#fff" stroke-width="7"/><line x1="37" y1="36" x2="46" y2="45" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M49 8 l2.6 5.3 5.8 .85 -4.2 4.1 1 5.75 -5.2 -2.75 -5.2 2.75 1 -5.75 -4.2 -4.1 5.8 -.85 z" fill="#FBBF24"/><circle cx="14" cy="50" r="3" fill="#FDE68A"/></svg><span class="wordmark" style="background:linear-gradient(90deg,#7C3AED,#EC4899); -webkit-background-clip:text; background-clip:text; color:transparent">Quizify</span></div>
+      <div class="logobox dark"><svg width="54" height="54" viewBox="0 0 64 64"><defs><linearGradient id="g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#A78BFA"/><stop offset="1" stop-color="#F9A8D4"/></linearGradient></defs><rect x="2" y="2" width="60" height="60" rx="18" fill="url(#g3)"/><circle cx="30" cy="29" r="13" fill="none" stroke="#1E1B4B" stroke-width="7"/><line x1="37" y1="36" x2="46" y2="45" stroke="#1E1B4B" stroke-width="7" stroke-linecap="round"/><path d="M49 8 l2.6 5.3 5.8 .85 -4.2 4.1 1 5.75 -5.2 -2.75 -5.2 2.75 1 -5.75 -4.2 -4.1 5.8 -.85 z" fill="#FBBF24"/></svg><span class="wordmark" style="color:#fff">Quizify</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🗣️ Ton & slogans</h2>
+    <ul class="voice">
+      <li><b>Voix</b> : complice, énergique, familiale. On tutoie, on célèbre, on ne se moque jamais.</li>
+      <li><b>Slogan principal</b> : « La fête commence par une question ✨ »</li>
+      <li><b>Variantes</b> : « Qui la connaît le mieux ? » (anniversaires) · « Ta soirée. Ton quiz. » (soirées) · « 3 secondes pour jouer, une soirée pour en parler. »</li>
+      <li><b>Emojis signature</b> : 🎯 ✨ 🎧 🎂 🔥</li>
+    </ul>
+    <br>
+    <span class="pill">Toujours : couleurs vives + coins arrondis + confettis</span>
+    <span class="pill">Jamais : noir austère, angles durs, jargon</span>
+  </div>
+
+</div>
+</body>
+</html>
