@@ -101,6 +101,7 @@ export default function Birthday() {
       {questions && (
         <div className="card space-y-4">
           <h2 className="font-display text-2xl font-extrabold">Aperçu — vérifie que tout est juste 👀</h2>
+          <p className="font-semibold text-slate-400">💡 Ici tu vois les réponses pour vérifier les anecdotes — normal, c'est TON quiz sur elle. En partie live, active « 🙋 Je joue aussi » pour participer quand même !</p>
           <ol className="space-y-3">
             {questions.map((q, i) => (
               <li key={i} className="rounded-2xl bg-slate-50 p-4">

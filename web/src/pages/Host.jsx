@@ -4,13 +4,18 @@ import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
 import AudioClip from '../components/AudioClip';
 import ShareButtons from '../components/ShareButtons';
+import { useAuth } from '../store';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
+const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-slate-900', 'bg-minty'];
 
 export default function Host() {
   const { pin } = useParams();
+  const { user } = useAuth();
   const hostKey = sessionStorage.getItem(`host-${pin}`);
   const [state, setState] = useState('lobby');
+  const [hostPlays, setHostPlays] = useState(false);
+  const [myAnswer, setMyAnswer] = useState(null);
   const [game, setGame] = useState({ players: [] });
   const [q, setQ] = useState(null);
   const [reveal, setReveal] = useState(null);
@@ -30,8 +35,10 @@ export default function Host() {
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }
+      if (m.t === 'hostJoined') setHostPlays(true);
+      if (m.t === 'answered') setMyAnswer(m.i);
       if (m.t === 'question') {
-        setQ(m); setReveal(null); setAnswered({ answered: 0, total: 0 }); setState('question');
+        setQ(m); setReveal(null); setAnswered({ answered: 0, total: 0 }); setMyAnswer(null); setState('question');
         phaseRef.current = 'question';
         clearInterval(timerRef.current);
         const tick = () => {
@@ -89,7 +96,14 @@ export default function Host() {
           </div>
         </div>
         {error && <p className="font-bold text-cherry">{error}</p>}
-        <button onClick={() => send('start')} disabled={(game.players || []).length === 0}
+        <button
+          onClick={() => wsRef.current?.send(JSON.stringify({ t: 'hostJoin', name: user?.name || 'Animateur' }))}
+          disabled={hostPlays}
+          className={`w-full rounded-2xl border-2 py-3 font-display text-lg font-extrabold transition-all ${hostPlays ? 'border-minty bg-minty-light text-emerald-900' : 'border-grape/40 bg-white text-grape hover:border-grape'}`}
+        >
+          {hostPlays ? `✅ Tu joues aussi (${user?.name || 'Animateur'}) !` : '🙋 Je joue aussi !'}
+        </button>
+        <button onClick={() => send('start')} disabled={(game.players || []).length === 0 && !hostPlays}
           className="btn-primary w-full text-2xl disabled:opacity-40">🚀 Lancer la partie !</button>
       </div>
     );
@@ -110,9 +124,20 @@ export default function Host() {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => (
-            <div key={i} className="card flex items-center gap-3 !py-4 font-display text-xl font-extrabold">
-              <span className="text-3xl">{SHAPES[i % 4]}</span> {o}
-            </div>
+            hostPlays ? (
+              <button
+                key={i}
+                disabled={myAnswer !== null}
+                onClick={() => { wsRef.current?.send(JSON.stringify({ t: 'answer', i })); navigator.vibrate?.(40); }}
+                className={`${COLORS[i % 4]} rounded-3xl p-4 text-left font-display text-xl font-extrabold text-white shadow-pop transition-all active:translate-y-1 active:shadow-none ${myAnswer !== null && myAnswer !== i ? 'opacity-40' : ''} ${myAnswer === i ? 'ring-4 ring-slate-800' : ''}`}
+              >
+                <span className="mr-2 text-3xl">{SHAPES[i % 4]}</span>{o}
+              </button>
+            ) : (
+              <div key={i} className="card flex items-center gap-3 !py-4 font-display text-xl font-extrabold">
+                <span className="text-3xl">{SHAPES[i % 4]}</span> {o}
+              </div>
+            )
           ))}
         </div>
         <div className="card flex items-center justify-between">

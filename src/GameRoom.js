@@ -93,6 +93,23 @@ export class GameRoom extends DurableObject {
     if (!game) return;
 
     if (att.role === 'host') {
+      if (msg.t === 'hostJoin' && game.phase === 'lobby') {
+        // L'animateur joue aussi : il devient un joueur à part entière.
+        const name = (String(msg.name || 'Animateur').trim().slice(0, 20)) || 'Animateur';
+        const players = (await this.ctx.storage.get('players')) || {};
+        if (!players[name.toLowerCase()]) {
+          players[name.toLowerCase()] = { name, score: 0, answers: {} };
+          await this.ctx.storage.put('players', players);
+        }
+        game.hostName = name;
+        await this.ctx.storage.put('game', game);
+        await this.broadcastLobbyUpdate();
+        ws.send(JSON.stringify({ t: 'hostJoined', name }));
+        return;
+      }
+      if (msg.t === 'answer' && game.hostName) {
+        return this.recordAnswer(game, game.hostName, msg.i, ws);
+      }
       if (msg.t === 'start' && game.phase === 'lobby') return this.startQuestion(game, 0);
       if (msg.t === 'next') {
         if (game.phase === 'question') return this.reveal(game);
@@ -107,41 +124,46 @@ export class GameRoom extends DurableObject {
     }
 
     // Player answer
-    if (msg.t === 'answer' && game.phase === 'question' && att.name) {
-      const players = (await this.ctx.storage.get('players')) || {};
-      const p = players[att.name.toLowerCase()];
-      if (!p) return;
-      const qIdx = game.currentQ;
-      if (p.answers[qIdx] !== undefined) return; // already answered
-      const now = Date.now();
-      if (now > game.qEnd) return; // too late
-      const i = parseInt(msg.i);
-      const q = game.quiz.questions[qIdx];
-      if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
-      const elapsed = now - game.qStart;
-      const duration = game.qEnd - game.qStart;
-      let points = 0;
-      if (i === q.correct) {
-        // Speed points + streak bonus (combo of consecutive correct answers)
-        p.streak = (p.streak || 0) + 1;
-        const speed = Math.round(500 + 500 * Math.max(0, 1 - elapsed / duration));
-        const bonus = Math.min((p.streak - 1) * 50, 200);
-        points = speed + bonus;
-      } else {
-        p.streak = 0;
-      }
-      p.answers[qIdx] = { i, points };
-      p.score += points;
-      players[att.name.toLowerCase()] = p;
-      await this.ctx.storage.put('players', players);
-      ws.send(JSON.stringify({ t: 'answered', i }));
-
-      // Notify host of answer count; auto-reveal when everyone answered
-      const total = Object.keys(players).length;
-      const answered = Object.values(players).filter((pl) => pl.answers[qIdx] !== undefined).length;
-      this.broadcast({ t: 'answerCount', answered, total }, 'host');
-      if (answered >= total) await this.reveal(game);
+    if (msg.t === 'answer' && att.name) {
+      return this.recordAnswer(game, att.name, msg.i, ws);
     }
+  }
+
+  async recordAnswer(game, name, rawIndex, ws) {
+    if (game.phase !== 'question') return;
+    const players = (await this.ctx.storage.get('players')) || {};
+    const p = players[name.toLowerCase()];
+    if (!p) return;
+    const qIdx = game.currentQ;
+    if (p.answers[qIdx] !== undefined) return; // already answered
+    const now = Date.now();
+    if (now > game.qEnd) return; // too late
+    const i = parseInt(rawIndex);
+    const q = game.quiz.questions[qIdx];
+    if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
+    const elapsed = now - game.qStart;
+    const duration = game.qEnd - game.qStart;
+    let points = 0;
+    if (i === q.correct) {
+      // Speed points + streak bonus (combo of consecutive correct answers)
+      p.streak = (p.streak || 0) + 1;
+      const speed = Math.round(500 + 500 * Math.max(0, 1 - elapsed / duration));
+      const bonus = Math.min((p.streak - 1) * 50, 200);
+      points = speed + bonus;
+    } else {
+      p.streak = 0;
+    }
+    p.answers[qIdx] = { i, points };
+    p.score += points;
+    players[name.toLowerCase()] = p;
+    await this.ctx.storage.put('players', players);
+    try { ws.send(JSON.stringify({ t: 'answered', i })); } catch {}
+
+    // Notify host of answer count; auto-reveal when everyone answered
+    const total = Object.keys(players).length;
+    const answered = Object.values(players).filter((pl) => pl.answers[qIdx] !== undefined).length;
+    this.broadcast({ t: 'answerCount', answered, total }, 'host');
+    if (answered >= total) await this.reveal(game);
   }
 
   async webSocketClose(ws) {

@@ -30,6 +30,7 @@ export default function BlindTest() {
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
+  const [hideAnswers, setHideAnswers] = useState(false);
 
   const toggle = (label) => {
     setSelected((s) => (s.includes(label) ? s.filter((x) => x !== label) : [...s, label]));
@@ -112,23 +113,36 @@ export default function BlindTest() {
 
       {questions && (
         <div className="card space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-2xl font-extrabold">Aperçu ({questions.length} morceaux)</h2>
-            <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Autres morceaux</button>
+            <div className="flex gap-2">
+              <button onClick={() => setHideAnswers(!hideAnswers)} className="btn-ghost !px-4 !py-2 !text-sm">
+                {hideAnswers ? '👀 Tout voir' : '🙈 Masquer (je joue aussi)'}
+              </button>
+              <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Autres morceaux</button>
+            </div>
           </div>
-          <ol className="space-y-3">
-            {questions.map((question, i) => (
-              <li key={i} className="rounded-2xl bg-slate-50 p-4">
-                <div className="flex items-center gap-3">
-                  {question.artwork && <img src={question.artwork} alt="" className="h-14 w-14 rounded-xl" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-bold">{i + 1}. {question.options[question.correct]}</p>
-                    <AudioClip src={question.audioUrl} className="mt-1 w-full" />
+          {hideAnswers ? (
+            <div className="rounded-2xl bg-slate-50 p-6 text-center">
+              <div className="text-4xl">🙈🎶</div>
+              <p className="mt-2 font-display text-lg font-extrabold">{questions.length} morceaux surprise prêts !</p>
+              <p className="font-semibold text-slate-400">Les titres et extraits sont cachés pour que tu puisses jouer toi aussi.</p>
+            </div>
+          ) : (
+            <ol className="space-y-3">
+              {questions.map((question, i) => (
+                <li key={i} className="rounded-2xl bg-slate-50 p-4">
+                  <div className="flex items-center gap-3">
+                    {question.artwork && <img src={question.artwork} alt="" className="h-14 w-14 rounded-xl" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-bold">{i + 1}. {question.options[question.correct]}</p>
+                      <AudioClip src={question.audioUrl} className="mt-1 w-full" />
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+          )}
           {!saved ? (
             <button onClick={save} disabled={loading} className="btn-pink w-full text-xl">💾 Enregistrer ce blind test</button>
           ) : (
