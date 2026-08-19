@@ -27,6 +27,6 @@ export function wsUrl(pin, params) {
 
 // Gumroad checkout links — replace with your own Gumroad account links.
 export const GUMROAD_LINKS = {
-  premium: 'https://gumroad.com/l/quizify-premium',
-  event: 'https://gumroad.com/l/quizify-event',
+  premium: 'https://gumroad.com/l/quizzalo-premium',
+  event: 'https://gumroad.com/l/quizzalo-event',
 };

@@ -1,4 +1,4 @@
-# 🎯 Quizify — Générateur de quiz IA + parties live
+# 🎯 Quizzalo — Générateur de quiz IA + parties live
 
 Crée des quiz sur n'importe quel sujet avec l'IA et joue en direct avec tes amis : chacun rejoint avec un code PIN sur son téléphone, classement en temps réel, podium avec confettis. Inclut un mode **Quiz Anniversaire** 🎂 personnalisé à partir d'anecdotes.
 
@@ -42,4 +42,4 @@ npx wrangler dev       # http://localhost:8787
 
 ## Configuration Gumroad
 
-Créer 2 produits avec **License keys** activées : permalinks `quizify-premium` (abonnement 4,99 €/mois) et `quizify-event` (14,99 €). Si les permalinks diffèrent, les mettre à jour dans `wrangler.toml` (`GUMROAD_*_PERMALINK`) et `web/src/api.js` (`GUMROAD_LINKS`).
+Créer 2 produits avec **License keys** activées : permalinks `quizzalo-premium` (abonnement 4,99 €/mois) et `quizzalo-event` (14,99 €). Si les permalinks diffèrent, les mettre à jour dans `wrangler.toml` (`GUMROAD_*_PERMALINK`) et `web/src/api.js` (`GUMROAD_LINKS`).

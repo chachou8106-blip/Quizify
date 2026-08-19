@@ -1,6 +1,6 @@
-# Quizify — Feuille de route « L'incontournable des soirées »
+# Quizzalo — Feuille de route « L'incontournable des soirées »
 
-*Vision : faire de Quizify le réflexe n°1 des soirées entre amis, anniversaires et événements francophones — le « Kahoot des fêtes de famille », propulsé par l'IA.*
+*Vision : faire de Quizzalo le réflexe n°1 des soirées entre amis, anniversaires et événements francophones — le « Kahoot des fêtes de famille », propulsé par l'IA.*
 
 ## ✅ Déjà en ligne (v2.2 — août 2026)
 
@@ -30,7 +30,7 @@ Quiz IA sur 26 catégories · 7 types de quiz (QCM, Vrai/Faux, Devinette Emoji, 
 
 **International** : EN/ES (l'app est déjà structurée pour), catalogues musicaux locaux via Deezer.
 
-**Domaine + notoriété** : quizify.fr / quizify.app, page TikTok/Instagram avec extraits de parties (les réactions au podium = contenu parfait), programme de parrainage (1 mois offert).
+**Domaine + notoriété** : quizzalo.fr / quizify.app, page TikTok/Instagram avec extraits de parties (les réactions au podium = contenu parfait), programme de parrainage (1 mois offert).
 
 ## 💰 Modèle économique cible
 

@@ -1,6 +1,6 @@
 {
-  "name": "Quizify — La fête commence par une question",
-  "short_name": "Quizify",
+  "name": "Quizzalo — La fête commence par une question",
+  "short_name": "Quizzalo",
   "description": "Quiz IA, blind tests et parties live pour tes soirées. Sans compte pour les joueurs.",
   "start_url": "/",
   "scope": "/",

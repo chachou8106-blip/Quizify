@@ -1,4 +1,4 @@
-// Quizify — Cloudflare Worker API + static SPA + Durable Object live games.
+// Quizzalo — Cloudflare Worker API + static SPA + Durable Object live games.
 
 import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
@@ -194,7 +194,7 @@ function cleanTitle(s) {
 }
 
 async function deezerJson(path) {
-  const res = await fetch(`https://api.deezer.com${path}`, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
+  const res = await fetch(`https://api.deezer.com${path}`, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizzalo)' } });
   if (!res.ok) return null;
   return res.json().catch(() => null);
 }
@@ -260,7 +260,7 @@ async function fetchThemeTracks(term, limit = 60) {
 // Resolve a fresh Deezer preview URL at play time (stored URLs never expire).
 async function deezerPreviewUrl(id) {
   const res = await fetch(`https://api.deezer.com/track/${encodeURIComponent(id)}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' },
+    headers: { 'User-Agent': 'Mozilla/5.0 (Quizzalo)' },
   });
   if (!res.ok) return null;
   const data = await res.json().catch(() => ({}));
@@ -269,7 +269,7 @@ async function deezerPreviewUrl(id) {
 
 async function fetchTracksItunes(term, limit = 25) {
   const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&country=FR&limit=${limit}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizzalo)' } });
   if (!res.ok) return { status: res.status, tracks: [] };
   const data = await res.json().catch(() => ({}));
   const tracks = (data.results || [])
@@ -520,8 +520,8 @@ app.post('/api/rewards/claim', auth, async (c) => {
 // Config publique : liens d'achat + AdSense. Remplie via les [vars] de wrangler.toml.
 app.get('/api/config', (c) => c.json({
   gumroad: {
-    premium: c.env.GUMROAD_PREMIUM_URL || `https://gumroad.com/l/${c.env.GUMROAD_PREMIUM_PERMALINK || 'quizify-premium'}`,
-    event: c.env.GUMROAD_EVENT_URL || `https://gumroad.com/l/${c.env.GUMROAD_EVENT_PERMALINK || 'quizify-event'}`,
+    premium: c.env.GUMROAD_PREMIUM_URL || `https://gumroad.com/l/${c.env.GUMROAD_PREMIUM_PERMALINK || 'quizzalo-premium'}`,
+    event: c.env.GUMROAD_EVENT_URL || `https://gumroad.com/l/${c.env.GUMROAD_EVENT_PERMALINK || 'quizzalo-event'}`,
   },
   adsenseClient: c.env.ADSENSE_CLIENT || null,
 }));
@@ -532,7 +532,7 @@ app.get('/ads.txt', (c) => {
   return c.text(`google.com, ${c.env.ADSENSE_CLIENT.replace('ca-', '')}, DIRECT, f08c47fec0942fa0\n`);
 });
 
-app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizify' }));
+app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizzalo' }));
 
 // Protected self-test: verifies AI, D1 and KV in production. GET /api/selftest?key=<AUTH_SECRET>
 app.get('/api/selftest', async (c) => {

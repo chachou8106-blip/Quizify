@@ -47,7 +47,7 @@ function drawBase(ctx, title) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#fff';
   ctx.font = '800 64px "Baloo 2", sans-serif';
-  ctx.fillText('🎯 Quizify', W / 2, 150);
+  ctx.fillText('🎯 Quizzalo', W / 2, 150);
   ctx.fillStyle = 'rgba(255,255,255,.55)';
   ctx.font = '700 40px Nunito, sans-serif';
   const lines = wrapText(ctx, title, W - 200);
@@ -116,7 +116,7 @@ function drawEnd(ctx) {
   roundRect(ctx, 140, 1180, W - 280, 170, 60); ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.font = '800 56px "Baloo 2", sans-serif';
-  ctx.fillText('🎮 Joue en vrai sur Quizify', W / 2, 1285);
+  ctx.fillText('🎮 Joue en vrai sur Quizzalo', W / 2, 1285);
   ctx.fillStyle = 'rgba(255,255,255,.7)';
   ctx.font = '700 44px Nunito, sans-serif';
   ctx.fillText(location.host, W / 2, 1440);
@@ -279,7 +279,7 @@ export default function Studio() {
         {status === 'done' && videoUrl && (
           <div className="space-y-4">
             <video src={videoUrl} controls playsInline className="mx-auto w-full max-w-[280px] rounded-2xl border border-white/15" style={{ aspectRatio: '9/16' }} />
-            <a href={videoUrl} download={`quizify-short.${ext}`} className="btn-primary w-full text-xl">⬇️ Télécharger la vidéo</a>
+            <a href={videoUrl} download={`quizzalo-short.${ext}`} className="btn-primary w-full text-xl">⬇️ Télécharger la vidéo</a>
             <p className="text-sm font-semibold text-white/50">Puis ouvre YouTube → ➕ → « Créer un Short » → importe la vidéo. Titre conseillé : « Seuls 1 % réussissent ce quiz {selected?.title || ''} 🤯 #quiz #shorts »</p>
           </div>
         )}

@@ -1,4 +1,4 @@
-// Quizify service worker — v1
+// Quizzalo service worker — v1
 // Stratégie prudente : les pages et l'API vont TOUJOURS au réseau (pas de cache périmé),
 // seuls les assets hashés (immutables) sont mis en cache.
 self.addEventListener('install', () => self.skipWaiting());

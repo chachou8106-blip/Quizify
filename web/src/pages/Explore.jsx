@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import AdSlot from '../components/AdSlot';
 
-// Tout Quizify rangé par catégorie — le hub d'exploration (et la vitrine des futurs packs).
+// Tout Quizzalo rangé par catégorie — le hub d'exploration (et la vitrine des futurs packs).
 export default function Explore() {
   const [categories, setCategories] = useState({});
 

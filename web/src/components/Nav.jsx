@@ -11,8 +11,8 @@ export default function Nav() {
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#14102e]/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
         <Link to="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <img src="/logo.svg" alt="Quizify" className="h-9 w-9" />
-          <span className="font-display text-2xl font-extrabold bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">Quizify</span>
+          <img src="/logo.svg" alt="Quizzalo" className="h-9 w-9" />
+          <span className="font-display text-2xl font-extrabold bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">Quizzalo</span>
         </Link>
 
         <div className="hidden items-center gap-5 sm:flex">

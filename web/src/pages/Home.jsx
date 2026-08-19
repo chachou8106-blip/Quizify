@@ -19,7 +19,7 @@ export default function Home() {
         <span className="deco right-4 top-10 animate-floaty text-3xl" style={{ animationDelay: '0.9s' }}>🎊</span>
         <span className="deco left-8 bottom-2 animate-floaty text-3xl" style={{ animationDelay: '1.4s' }}>🎵</span>
         <span className="deco right-10 bottom-8 animate-floaty text-4xl" style={{ animationDelay: '0.6s' }}>❓</span>
-        <img src="/logo.svg" alt="Quizify" className="mx-auto mb-4 h-20 w-20 animate-floaty" />
+        <img src="/logo.svg" alt="Quizzalo" className="mx-auto mb-4 h-20 w-20 animate-floaty" />
         <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-tight text-white sm:text-5xl">
           La fête commence<br className="hidden sm:block" /> par une <span className="bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">question</span> ✨
         </h1>

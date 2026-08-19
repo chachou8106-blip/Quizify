@@ -2,7 +2,7 @@
 export function podiumText(title, leaderboard) {
   const medals = ['🥇', '🥈', '🥉'];
   const lines = (leaderboard || []).slice(0, 3).map((p, i) => `${medals[i]} ${p.name} — ${p.score} pts`).join('\n');
-  return `🏆 Podium Quizify — « ${title || 'Quiz'} »\n${lines}\n\nÀ ton tour ! Crée ton quiz en 30 secondes 👉 ${location.origin} ✨`;
+  return `🏆 Podium Quizzalo — « ${title || 'Quiz'} »\n${lines}\n\nÀ ton tour ! Crée ton quiz en 30 secondes 👉 ${location.origin} ✨`;
 }
 
 export default function ShareButtons({ title, leaderboard }) {

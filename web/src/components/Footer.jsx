@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="mx-auto max-w-5xl px-4 py-8 text-center">
         <div className="flex items-center justify-center gap-2">
           <img src="/logo.svg" alt="" className="h-7 w-7" />
-          <span className="font-display text-xl font-extrabold bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">Quizify</span>
+          <span className="font-display text-xl font-extrabold bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">Quizzalo</span>
         </div>
         <p className="mt-1 font-semibold text-white/50">La fête commence par une question ✨</p>
         <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-white/60">
