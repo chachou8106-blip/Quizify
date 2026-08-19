@@ -2,7 +2,7 @@
 
 import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
-import { generateQuestions, CATEGORIES } from './ai';
+import { generateQuestions, generateMathQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
 export { GameRoom } from './GameRoom';
 
@@ -119,6 +119,15 @@ app.post('/api/ai/generate', auth, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts } = body;
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
+
+  // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
+  if (type === 'math') {
+    const questions = generateMathQuestions({
+      count: Math.min(Math.max(parseInt(count) || 8, 1), 20),
+      difficulty,
+    });
+    return c.json({ questions });
+  }
 
   const plan = await getPlan(c, user.id);
   let useBonus = false;
@@ -458,6 +467,10 @@ app.get('/api/selftest', async (c) => {
     });
     out.ai = { ok: true, sample: questions[0]?.question, count: questions.length };
   } catch (e) { out.ai = { ok: false, error: e.message }; }
+  try {
+    const mq = generateMathQuestions({ count: 2, difficulty: 'medium' });
+    out.math = { ok: mq.length === 2, sample: mq[0]?.question, answer: mq[0]?.options[mq[0]?.correct] };
+  } catch (e) { out.math = { ok: false, error: e.message }; }
   out.secretSource = c.env.AUTH_SECRET ? 'env' : (cachedSecret ? 'd1' : 'fallback');
   return c.json(out);
 });

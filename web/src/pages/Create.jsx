@@ -15,7 +15,7 @@ const TYPES = [
   { value: 'quote', label: '💬 Qui a dit ça ?', hint: 'Citations célèbres' },
   { value: 'year', label: '📅 En quelle année ?', hint: 'Dates marquantes' },
   { value: 'anagram', label: '🔤 Anagrammes', hint: 'Lettres mélangées' },
-  { value: 'math', label: '🧮 Calcul rapide', hint: 'Mental et fun' },
+  { value: 'math', label: '🧮 Calcul mental', hint: 'Réponses calculées, 100 % justes — idéal devoirs' },
 ];
 
 export default function Create() {

@@ -167,6 +167,85 @@ function normalize(raw, type) {
   return out;
 }
 
+// ---------- Calcul mental : généré par du code, jamais par l'IA → réponses garanties justes ----------
+
+const rnd = (n) => Math.floor(Math.random() * n);
+const between = (a, b) => a + rnd(b - a + 1);
+const pick = (arr) => arr[rnd(arr.length)];
+
+function mathItem(difficulty) {
+  const easy = [
+    () => { const a = between(2, 20), b = between(2, 20); return { q: `Combien font ${a} + ${b} ?`, a: a + b, e: `${a} + ${b} = ${a + b}` }; },
+    () => { const a = between(8, 20), b = between(2, a - 1); return { q: `Combien font ${a} − ${b} ?`, a: a - b, e: `${a} − ${b} = ${a - b}` }; },
+    () => { const a = between(2, 5), b = between(2, 10); return { q: `Combien font ${a} × ${b} ?`, a: a * b, e: `${a} × ${b} = ${a * b}` }; },
+    () => { const n = between(2, 30); return { q: `Quel est le double de ${n} ?`, a: 2 * n, e: `${n} × 2 = ${2 * n}` }; },
+    () => { const k = between(2, 20); return { q: `Quelle est la moitié de ${2 * k} ?`, a: k, e: `${2 * k} ÷ 2 = ${k}` }; },
+  ];
+  const medium = [
+    () => { const a = between(3, 12), b = between(3, 12); return { q: `Combien font ${a} × ${b} ?`, a: a * b, e: `${a} × ${b} = ${a * b}` }; },
+    () => { const b = between(2, 12), k = between(2, 12); return { q: `Combien font ${b * k} ÷ ${b} ?`, a: k, e: `${b * k} ÷ ${b} = ${k}` }; },
+    () => { const k = between(2, 25); return { q: `Quel est le quart de ${4 * k} ?`, a: k, e: `${4 * k} ÷ 4 = ${k}` }; },
+    () => { const k = between(2, 20); return { q: `Quel est le tiers de ${3 * k} ?`, a: k, e: `${3 * k} ÷ 3 = ${k}` }; },
+    () => { const k = between(2, 40); return { q: `Combien font 50 % de ${2 * k} ?`, a: k, e: `50 % = la moitié : ${2 * k} ÷ 2 = ${k}` }; },
+    () => { const k = between(2, 20); return { q: `Combien font 25 % de ${4 * k} ?`, a: k, e: `25 % = le quart : ${4 * k} ÷ 4 = ${k}` }; },
+    () => { const k = between(2, 30); return { q: `Combien font 10 % de ${10 * k} ?`, a: k, e: `10 % : ${10 * k} ÷ 10 = ${k}` }; },
+    () => { const a = between(25, 99), b = between(25, 99); return { q: `Combien font ${a} + ${b} ?`, a: a + b, e: `${a} + ${b} = ${a + b}` }; },
+  ];
+  const hard = [
+    () => { const n = between(6, 15); return { q: `Combien font ${n}² ?`, a: n * n, e: `${n} × ${n} = ${n * n}` }; },
+    () => { const n = between(4, 15); return { q: `Quelle est la racine carrée de ${n * n} (√${n * n}) ?`, a: n, e: `${n} × ${n} = ${n * n}, donc √${n * n} = ${n}` }; },
+    () => { const n = between(3, 9); return { q: `Combien font ${n}³ ?`, a: n * n * n, e: `${n} × ${n} × ${n} = ${n * n * n}` }; },
+    () => { const a = between(12, 29), b = between(3, 9); return { q: `Combien font ${a} × ${b} ?`, a: a * b, e: `${a} × ${b} = ${a * b}` }; },
+    () => { const k = between(3, 30); return { q: `Combien font 20 % de ${5 * k} ?`, a: k, e: `20 % = un cinquième : ${5 * k} ÷ 5 = ${k}` }; },
+    () => { const k = between(2, 20); return { q: `Combien font 75 % de ${4 * k} ?`, a: 3 * k, e: `75 % = trois quarts : (${4 * k} ÷ 4) × 3 = ${3 * k}` }; },
+    () => { const k = between(2, 15); return { q: `Combien font les trois quarts de ${4 * k} ?`, a: 3 * k, e: `(${4 * k} ÷ 4) × 3 = ${3 * k}` }; },
+  ];
+  const pool = difficulty === 'easy' ? easy : difficulty === 'hard' ? hard : medium;
+  return pick(pool)();
+}
+
+export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
+  const out = [];
+  const seen = new Set();
+  let guard = 0;
+  while (out.length < count && guard++ < 300) {
+    const { q, a, e } = mathItem(difficulty);
+    if (seen.has(q)) continue;
+    seen.add(q);
+    // Distracteurs plausibles, uniques, jamais égaux à la bonne réponse
+    const cands = [a + 1, a - 1, a + 2, a - 2, a + 10, a - 10, a * 2, Math.round(a / 2), a + 5, a - 5]
+      .filter((x) => Number.isInteger(x) && x >= 0 && x !== a);
+    const distractors = [...new Set(cands)].sort(() => Math.random() - 0.5).slice(0, 3);
+    if (distractors.length < 3) continue;
+    const options = [a, ...distractors].map(String).sort(() => Math.random() - 0.5);
+    out.push({ question: q, options, correct: options.indexOf(String(a)), explanation: e });
+  }
+  return out;
+}
+
+// ---------- Passe de vérification : l'IA relit et corrige le quiz avant affichage ----------
+
+async function verifyQuestions(env, questions, language) {
+  const lang = language === 'en' ? 'English' : 'français';
+  const prompt = `Tu es un vérificateur de quiz rigoureux. Voici un quiz en ${lang} au format JSON.
+Pour CHAQUE question : vérifie que la réponse à l'index "correct" est factuellement EXACTE et que les autres options sont fausses.
+- Si l'index "correct" pointe vers une mauvaise option alors qu'une autre option est la bonne, corrige l'index.
+- Si la question est fausse, ambiguë ou invérifiable, SUPPRIME-la du tableau.
+- Ne reformule pas les questions correctes, ne rajoute rien.
+Réponds UNIQUEMENT avec le tableau JSON final (même format).
+Quiz : ${JSON.stringify(questions)}`;
+  const res = await env.AI.run(MODEL, {
+    messages: [
+      { role: 'system', content: 'Tu réponds uniquement en JSON valide, sans aucun texte hors du JSON.' },
+      { role: 'user', content: prompt },
+    ],
+    max_tokens: 4096,
+    temperature: 0.1,
+  });
+  const verified = normalize(extractJSON(extractText(res)), 'multipleChoice');
+  return verified;
+}
+
 export async function generateQuestions(env, opts) {
   const prompt = buildPrompt(opts);
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
@@ -183,10 +262,19 @@ export async function generateQuestions(env, opts) {
         temperature: attempt === 0 ? 0.7 : 0.4,
       });
       const text = extractText(res);
-      const questions = normalize(extractJSON(text), opts.type);
+      let questions = normalize(extractJSON(text), opts.type);
       // Accept a partial batch rather than failing (e.g. 7/10 questions)
-      if (questions.length >= Math.min(3, count)) return questions.slice(0, count);
-      throw new Error(`seulement ${questions.length} question(s) valides`);
+      if (questions.length < Math.min(3, count)) throw new Error(`seulement ${questions.length} question(s) valides`);
+      questions = questions.slice(0, count);
+      // Passe de vérification : relecture factuelle avant affichage (sauf quiz personnalisés,
+      // dont la vérité vient des anecdotes fournies par l'utilisateur).
+      if (!opts.personalFacts) {
+        try {
+          const verified = await verifyQuestions(env, questions, opts.language);
+          if (verified.length >= Math.min(3, questions.length)) questions = verified;
+        } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
+      }
+      return questions;
     } catch (e) {
       lastErr = e;
       // brief pause before retrying (transient AI capacity errors)
