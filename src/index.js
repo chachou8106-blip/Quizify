@@ -265,6 +265,29 @@ app.post('/api/billing/webhook', async (c) => {
 
 app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizify' }));
 
+// Protected self-test: verifies AI, D1 and KV in production. GET /api/selftest?key=<AUTH_SECRET>
+app.get('/api/selftest', async (c) => {
+  if (c.req.query('key') !== secret(c)) return c.json({ error: 'forbidden' }, 403);
+  const out = {};
+  try {
+    const r = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM users').first();
+    out.d1 = { ok: true, users: r.n };
+  } catch (e) { out.d1 = { ok: false, error: e.message }; }
+  try {
+    await c.env.KV.put('selftest', String(Date.now()), { expirationTtl: 60 });
+    out.kv = { ok: (await c.env.KV.get('selftest')) !== null };
+  } catch (e) { out.kv = { ok: false, error: e.message }; }
+  try {
+    const questions = await generateQuestions(c.env, {
+      topic: 'La France', category: 'culture', type: 'multipleChoice',
+      count: 2, difficulty: 'easy', language: 'fr', personalFacts: null,
+    });
+    out.ai = { ok: true, sample: questions[0]?.question, count: questions.length };
+  } catch (e) { out.ai = { ok: false, error: e.message }; }
+  out.authSecretConfigured = !!c.env.AUTH_SECRET;
+  return c.json(out);
+});
+
 app.notFound((c) => {
   if (new URL(c.req.url).pathname.startsWith('/api/')) return c.json({ error: 'Not Found' }, 404);
   return c.env.ASSETS.fetch(c.req.raw);
