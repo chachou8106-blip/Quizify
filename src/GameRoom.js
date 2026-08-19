@@ -170,6 +170,7 @@ export class GameRoom extends DurableObject {
       total: game.quiz.questions.length,
       question: q.question,
       options: q.options,
+      audioUrl: q.audioUrl || null,
       seconds: QUESTION_SECONDS,
       endsAt: game.qEnd,
     });
@@ -250,7 +251,7 @@ export class GameRoom extends DurableObject {
       const q = game.quiz.questions[game.currentQ];
       ws.send(JSON.stringify({
         t: 'question', idx: game.currentQ, total: game.quiz.questions.length,
-        question: q.question, options: q.options,
+        question: q.question, options: q.options, audioUrl: q.audioUrl || null,
         seconds: QUESTION_SECONDS, endsAt: game.qEnd,
       }));
     }

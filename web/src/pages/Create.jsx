@@ -65,7 +65,7 @@ export default function Create() {
         <div>
           <label className="mb-2 block font-display font-extrabold">Catégorie</label>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(categories).filter(([id]) => id !== 'birthday').map(([id, cat]) => (
+            {Object.entries(categories).filter(([id]) => id !== 'birthday' && id !== 'blindtest').map(([id, cat]) => (
               <button
                 key={id}
                 onClick={() => setCategory(id)}
@@ -96,6 +96,8 @@ export default function Create() {
             <select value={type} onChange={(e) => setType(e.target.value)} className="input">
               <option value="multipleChoice">QCM (4 options)</option>
               <option value="trueFalse">Vrai / Faux</option>
+              <option value="emoji">😀 Devinette Emoji</option>
+              <option value="riddle">🕵️ Qui suis-je ?</option>
             </select>
           </div>
           <div>

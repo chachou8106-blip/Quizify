@@ -17,6 +17,7 @@ export default function Nav() {
 
         <div className="hidden items-center gap-5 sm:flex">
           <Link to="/create" className="font-bold text-slate-600 hover:text-grape">Créer</Link>
+          <Link to="/blindtest" className="font-bold text-slate-600 hover:text-grape">Blind test</Link>
           <Link to="/join" className="font-bold text-slate-600 hover:text-grape">Rejoindre</Link>
           <Link to="/pricing" className="font-bold text-slate-600 hover:text-grape">Tarifs</Link>
           {user ? (
@@ -39,7 +40,7 @@ export default function Nav() {
 
       {open && (
         <div className="flex flex-col gap-1 border-t border-slate-100 bg-white px-4 py-3 sm:hidden">
-          {[['Créer un quiz', '/create'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : [])].map(([label, to]) => (
+          {[['Créer un quiz', '/create'], ['Blind test musical 🎧', '/blindtest'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : [])].map(([label, to]) => (
             <Link key={to} to={to} onClick={() => setOpen(false)} className="rounded-xl px-3 py-2.5 font-bold text-slate-700 hover:bg-grape/10">{label}</Link>
           ))}
           {user ? (

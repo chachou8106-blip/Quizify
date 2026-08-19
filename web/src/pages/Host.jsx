@@ -102,6 +102,9 @@ export default function Host() {
         </div>
         <div className="card text-center">
           <h2 className="font-display text-3xl font-extrabold">{q.question}</h2>
+          {q.audioUrl && (
+            <audio key={q.idx} controls autoPlay src={q.audioUrl} className="mx-auto mt-4 w-full max-w-md" />
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => (

@@ -3,6 +3,7 @@ import Nav from './components/Nav';
 import Home from './pages/Home';
 import Create from './pages/Create';
 import Birthday from './pages/Birthday';
+import BlindTest from './pages/BlindTest';
 import Player from './pages/Player';
 import MyQuizzes from './pages/MyQuizzes';
 import Pricing from './pages/Pricing';
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<Create />} />
           <Route path="/birthday" element={<Birthday />} />
+          <Route path="/blindtest" element={<BlindTest />} />
           <Route path="/play/:id" element={<Player mode="own" />} />
           <Route path="/s/:code" element={<Player mode="shared" />} />
           <Route path="/quizzes" element={<MyQuizzes />} />

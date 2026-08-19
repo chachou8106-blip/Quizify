@@ -119,13 +119,77 @@ app.post('/api/ai/generate', auth, async (c) => {
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     });
   } catch (e) {
-    return c.json({ error: 'La génération a échoué, réessaie dans un instant.' }, 502);
+    return c.json({ error: 'ai_failed', message: `La génération a échoué (${e.message}). Réessaie dans quelques secondes !` }, 502);
   }
 
   await c.env.DB.prepare(
     'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
   ).bind(user.id, monthKey()).run();
 
+  return c.json({ questions });
+});
+
+// ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
+
+async function fetchTracks(term, limit = 25) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&country=FR&limit=${limit}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Quizify/1.0' } });
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => ({}));
+  return (data.results || [])
+    .filter((t) => t.previewUrl && t.trackName && t.artistName)
+    .map((t) => ({
+      title: t.trackName.replace(/\s*\(.*?(remaster|version|edit|mix|live).*?\)/gi, '').trim(),
+      artist: t.artistName,
+      preview: t.previewUrl,
+      art: (t.artworkUrl100 || '').replace('100x100', '300x300'),
+    }));
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+app.get('/api/music/blindtest', async (c) => {
+  const q = (c.req.query('q') || '').trim();
+  const count = Math.min(Math.max(parseInt(c.req.query('count')) || 8, 3), 20);
+  if (!q) return c.json({ error: 'Indique au moins un artiste, genre ou thème' }, 400);
+
+  const themes = q.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
+  const perTheme = Math.max(10, Math.ceil((count * 5) / themes.length));
+  const pools = await Promise.all(themes.map((t) => fetchTracks(t, Math.min(perTheme, 25))));
+
+  // Dedupe by title+artist
+  const seen = new Set();
+  const pool = [];
+  for (const track of shuffle(pools.flat())) {
+    const key = `${track.title.toLowerCase()}|${track.artist.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pool.push(track);
+  }
+  if (pool.length < 4) {
+    return c.json({ error: 'Pas assez de morceaux trouvés pour ce thème — essaie d\'autres artistes ou genres.' }, 404);
+  }
+
+  const answers = pool.slice(0, Math.min(count, pool.length));
+  const questions = answers.map((track) => {
+    const label = (t) => `${t.title} — ${t.artist}`;
+    const distractors = shuffle(pool.filter((t) => t !== track)).slice(0, 3);
+    const options = shuffle([track, ...distractors]).map(label);
+    return {
+      question: '🎵 Quel est ce morceau ?',
+      options,
+      correct: options.indexOf(label(track)),
+      explanation: `C'était « ${track.title} » de ${track.artist}.`,
+      audioUrl: track.preview,
+      artwork: track.art,
+    };
+  });
   return c.json({ questions });
 });
 

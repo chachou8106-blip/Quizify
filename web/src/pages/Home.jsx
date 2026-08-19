@@ -23,6 +23,7 @@ export default function Home() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <Link to="/create" className="btn-primary text-xl">🤖 Créer un quiz IA</Link>
+          <Link to="/blindtest" className="btn-sunny text-xl">🎧 Blind test musical</Link>
           <Link to="/birthday" className="btn-pink text-xl">🎂 Quiz anniversaire</Link>
         </div>
       </section>
@@ -46,9 +47,9 @@ export default function Home() {
       {/* Features */}
       <section className="grid gap-5 sm:grid-cols-3">
         {[
-          ['🤖', 'IA sur tous les sujets', "Musique, ciné, sport, histoire… ou des anecdotes sur ta sœur. L'IA écrit les questions ET les explications."],
+          ['🎧', 'Blind test avec de la VRAIE musique', 'Extraits de 30 secondes de tes artistes préférés : qui reconnaît le morceau en premier ?'],
+          ['🤖', 'IA sur tous les sujets', "18 catégories, devinettes emoji, « Qui suis-je ? »… L'IA écrit les questions ET les explications."],
           ['📱', 'Mode fête en direct', 'Un code PIN, tout le monde joue sur son téléphone, classement en temps réel façon jeu télévisé.'],
-          ['🔗', 'Partage en 1 clic', 'Chaque quiz a son lien. Envoie-le sur WhatsApp et tes amis jouent en solo quand ils veulent.'],
         ].map(([emoji, title, desc]) => (
           <div key={title} className="card text-center">
             <div className="text-5xl">{emoji}</div>

@@ -14,7 +14,16 @@ export const CATEGORIES = {
   gaming: { name: 'Jeux Vidéo', emoji: '🎮', color: '#06B6D4' },
   food: { name: 'Cuisine', emoji: '🍳', color: '#F97316' },
   travel: { name: 'Voyages', emoji: '✈️', color: '#84CC16' },
+  geo: { name: 'Géographie', emoji: '🗺️', color: '#14B8A6' },
+  animals: { name: 'Animaux & Nature', emoji: '🐾', color: '#22C55E' },
+  tech: { name: 'High-Tech & Web', emoji: '💻', color: '#6366F1' },
+  litterature: { name: 'Littérature & BD', emoji: '📚', color: '#A16207' },
+  art: { name: 'Art & Mode', emoji: '🎨', color: '#DB2777' },
+  stars: { name: 'Célébrités', emoji: '🌟', color: '#EAB308' },
+  kids: { name: 'Spécial Enfants', emoji: '🧸', color: '#FB7185' },
+  retro: { name: 'Années 80/90/2000', emoji: '📼', color: '#7C3AED' },
   birthday: { name: 'Anniversaire', emoji: '🎂', color: '#F43F5E' },
+  blindtest: { name: 'Blind Test', emoji: '🎧', color: '#0EA5E9' },
 };
 
 const DIFF_LABEL = { easy: 'facile (grand public, réponses évidentes pour qui connaît un peu le sujet)', medium: 'moyen (il faut bien connaître le sujet)', hard: 'difficile (pour experts, détails pointus)' };
@@ -31,10 +40,13 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
     subject = `Sujet du quiz : ${topic}\nCatégorie : ${cat}`;
   }
 
-  const typeRules =
-    type === 'trueFalse'
-      ? `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`
-      : `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`;
+  const TYPE_RULES = {
+    trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
+    emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
+    riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
+    multipleChoice: `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`,
+  };
+  const typeRules = TYPE_RULES[type] || TYPE_RULES.multipleChoice;
 
   return `Tu es un créateur de quiz expert et amusant. Génère EXACTEMENT ${count} questions de quiz en ${lang}.
 ${subject}
@@ -63,8 +75,34 @@ function extractJSON(text) {
   const cleaned = text.replace(/```(?:json)?/g, '');
   const start = cleaned.indexOf('[');
   const end = cleaned.lastIndexOf(']');
-  if (start === -1 || end === -1 || end <= start) throw new Error('no-json');
-  return JSON.parse(cleaned.slice(start, end + 1));
+  if (start === -1) throw new Error('no-json');
+  if (end > start) {
+    try { return JSON.parse(cleaned.slice(start, end + 1)); } catch { /* fall through to salvage */ }
+  }
+  return salvageObjects(cleaned.slice(start));
+}
+
+// Salvage individual {...} objects from truncated or slightly invalid JSON.
+function salvageObjects(text) {
+  const out = [];
+  let depth = 0, objStart = -1, inStr = false, esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        try { out.push(JSON.parse(text.slice(objStart, i + 1))); } catch { /* skip bad object */ }
+        objStart = -1;
+      }
+    }
+  }
+  if (out.length === 0) throw new Error('no-json');
+  return out;
 }
 
 function normalize(raw, type) {
@@ -100,7 +138,7 @@ export async function generateQuestions(env, opts) {
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
 
   let lastErr;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await env.AI.run(MODEL, {
         messages: [
@@ -112,10 +150,14 @@ export async function generateQuestions(env, opts) {
       });
       const text = extractText(res);
       const questions = normalize(extractJSON(text), opts.type);
-      return questions.slice(0, count);
+      // Accept a partial batch rather than failing (e.g. 7/10 questions)
+      if (questions.length >= Math.min(3, count)) return questions.slice(0, count);
+      throw new Error(`seulement ${questions.length} question(s) valides`);
     } catch (e) {
       lastErr = e;
+      // brief pause before retrying (transient AI capacity errors)
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
   }
-  throw new Error(`Échec de génération IA (${lastErr?.message || 'inconnu'})`);
+  throw new Error(lastErr?.message || 'erreur inconnue');
 }

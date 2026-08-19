@@ -70,6 +70,9 @@ export default function Player({ mode }) {
 
       <div className="card">
         <h2 className="font-display text-2xl font-extrabold">{q.question}</h2>
+        {q.audioUrl && (
+          <audio key={idx} controls autoPlay src={q.audioUrl} className="mt-4 w-full" />
+        )}
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => {
             let cls = 'border-slate-200 bg-white hover:border-grape';
