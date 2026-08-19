@@ -15,7 +15,7 @@ export class GameRoom extends DurableObject {
     const url = new URL(request.url);
 
     if (url.pathname.endsWith('/init') && request.method === 'POST') {
-      const { quiz, hostKey, maxPlayers } = await request.json();
+      const { quiz, hostKey, maxPlayers, rewardCode } = await request.json();
       await this.ctx.storage.put('game', {
         phase: 'lobby',
         quiz, // {title, questions:[{question, options, correct, explanation}]}
@@ -24,6 +24,7 @@ export class GameRoom extends DurableObject {
         qEnd: 0,
         hostKey,
         maxPlayers: maxPlayers || 10,
+        rewardCode: rewardCode || null,
         createdAt: Date.now(),
       });
       await this.ctx.storage.put('players', {});
@@ -212,7 +213,18 @@ export class GameRoom extends DurableObject {
     game.phase = 'podium';
     await this.ctx.storage.put('game', game);
     const players = (await this.ctx.storage.get('players')) || {};
-    this.broadcast({ t: 'podium', leaderboard: this.leaderboard(players) });
+    const leaderboard = this.leaderboard(players);
+    this.broadcast({ t: 'podium', leaderboard, title: game.quiz.title });
+    // Le vainqueur reçoit (en privé) son code cadeau : 3 quiz IA offerts.
+    const winner = leaderboard[0];
+    if (winner && game.rewardCode) {
+      for (const ws of this.ctx.getWebSockets()) {
+        const att = ws.deserializeAttachment() || {};
+        if (att.role === 'player' && att.name === winner.name) {
+          try { ws.send(JSON.stringify({ t: 'reward', code: game.rewardCode, credits: 3 })); } catch {}
+        }
+      }
+    }
   }
 
   leaderboard(players, qIdx = null) {

@@ -97,7 +97,7 @@ app.post('/api/auth/login', async (c) => {
 
 app.get('/api/auth/me', auth, async (c) => {
   const user = c.get('user');
-  const u = await c.env.DB.prepare('SELECT id, email, name, plan, plan_expires FROM users WHERE id = ?').bind(user.id).first();
+  const u = await c.env.DB.prepare('SELECT id, email, name, plan, plan_expires, bonus_ai FROM users WHERE id = ?').bind(user.id).first();
   if (!u) return c.json({ error: 'Compte introuvable' }, 404);
   const plan = await getPlan(c, u.id);
   const usage = await c.env.DB.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND month = ?')
@@ -106,6 +106,7 @@ app.get('/api/auth/me', auth, async (c) => {
     user: { id: u.id, email: u.email, name: u.name, plan, plan_expires: u.plan_expires },
     aiUsed: usage?.count || 0,
     aiQuota: plan === 'free' ? FREE_AI_PER_MONTH : null,
+    aiBonus: u.bonus_ai || 0,
   });
 });
 
@@ -120,11 +121,18 @@ app.post('/api/ai/generate', auth, async (c) => {
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
 
   const plan = await getPlan(c, user.id);
+  let useBonus = false;
   if (plan === 'free') {
     const usage = await c.env.DB.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND month = ?')
       .bind(user.id, monthKey()).first();
     if ((usage?.count || 0) >= FREE_AI_PER_MONTH) {
-      return c.json({ error: 'quota', message: `Tu as utilisé tes ${FREE_AI_PER_MONTH} générations gratuites du mois. Passe en Premium pour générer sans limite !` }, 402);
+      // Crédits bonus gagnés en remportant des parties
+      const u = await c.env.DB.prepare('SELECT bonus_ai FROM users WHERE id = ?').bind(user.id).first();
+      if ((u?.bonus_ai || 0) > 0) {
+        useBonus = true;
+      } else {
+        return c.json({ error: 'quota', message: `Tu as utilisé tes ${FREE_AI_PER_MONTH} générations gratuites du mois. Passe en Premium pour générer sans limite !` }, 402);
+      }
     }
   }
 
@@ -141,9 +149,13 @@ app.post('/api/ai/generate', auth, async (c) => {
     return c.json({ error: 'ai_failed', message: `La génération a échoué (${e.message}). Réessaie dans quelques secondes !` }, 502);
   }
 
-  await c.env.DB.prepare(
-    'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
-  ).bind(user.id, monthKey()).run();
+  if (useBonus) {
+    await c.env.DB.prepare('UPDATE users SET bonus_ai = MAX(0, bonus_ai - 1) WHERE id = ?').bind(user.id).run();
+  } else {
+    await c.env.DB.prepare(
+      'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
+    ).bind(user.id, monthKey()).run();
+  }
 
   return c.json({ questions });
 });
@@ -352,11 +364,16 @@ app.post('/api/rooms', auth, async (c) => {
     const st = await stub.fetch('https://do/status').then((r) => r.json());
     if (!st.exists || st.phase === 'podium') break;
   }
+  // Récompense du vainqueur : 3 générations IA offertes, réclamées en créant un compte.
+  const rewardCode = shareCode();
+  await c.env.DB.prepare('INSERT INTO rewards (code, pin, credits) VALUES (?, ?, 3)')
+    .bind(rewardCode, pin).run().catch(() => {});
+
   const stub = c.env.GAME.get(c.env.GAME.idFromName(`room:${pin}`));
   await stub.fetch('https://do/init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ quiz, hostKey, maxPlayers }),
+    body: JSON.stringify({ quiz, hostKey, maxPlayers, rewardCode }),
   });
   return c.json({ pin, hostKey, maxPlayers, title: quiz.title, questionCount: quiz.questions.length });
 });
@@ -403,6 +420,21 @@ app.post('/api/billing/webhook', async (c) => {
     await c.env.DB.prepare("UPDATE users SET plan = 'free', plan_expires = NULL WHERE email = ?").bind(email).run();
   }
   return c.json({ ok: true });
+});
+
+// ---------- récompenses (le vainqueur d'une partie gagne 3 quiz IA) ----------
+
+app.post('/api/rewards/claim', auth, async (c) => {
+  const user = c.get('user');
+  const { code } = await c.req.json().catch(() => ({}));
+  if (!code) return c.json({ error: 'Code requis' }, 400);
+  const r = await c.env.DB.prepare('SELECT * FROM rewards WHERE code = ?').bind(String(code).trim().toLowerCase()).first();
+  if (!r) return c.json({ error: 'Code invalide' }, 404);
+  if (r.claimed_by) return c.json({ error: 'Ce code a déjà été utilisé' }, 409);
+  await c.env.DB.prepare('UPDATE rewards SET claimed_by = ? WHERE code = ?').bind(user.id, r.code).run();
+  await c.env.DB.prepare('UPDATE users SET bonus_ai = bonus_ai + ? WHERE id = ?').bind(r.credits, user.id).run();
+  const u = await c.env.DB.prepare('SELECT bonus_ai FROM users WHERE id = ?').bind(user.id).first();
+  return c.json({ ok: true, credits: r.credits, bonus: u?.bonus_ai || r.credits });
 });
 
 app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizify' }));

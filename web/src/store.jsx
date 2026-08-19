@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [aiUsed, setAiUsed] = useState(0);
   const [aiQuota, setAiQuota] = useState(null);
+  const [aiBonus, setAiBonus] = useState(0);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
       setUser(data.user);
       setAiUsed(data.aiUsed);
       setAiQuota(data.aiQuota);
+      setAiBonus(data.aiBonus || 0);
     } catch {
       setToken(null);
       setUser(null);
@@ -40,7 +42,7 @@ export function AuthProvider({ children }) {
   const logout = () => { setToken(null); setUser(null); };
 
   return (
-    <AuthContext.Provider value={{ user, ready, aiUsed, aiQuota, login, signup, logout, refresh }}>
+    <AuthContext.Provider value={{ user, ready, aiUsed, aiQuota, aiBonus, login, signup, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

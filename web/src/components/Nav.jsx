@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useAuth } from '../store';
 
 export default function Nav() {
-  const { user, logout, aiUsed, aiQuota } = useAuth();
+  const { user, logout, aiUsed, aiQuota, aiBonus } = useAuth();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -24,7 +24,7 @@ export default function Nav() {
             <>
               <Link to="/quizzes" className="font-bold text-slate-600 hover:text-grape">Mes quiz</Link>
               <span className="rounded-full bg-grape/10 px-3 py-1 text-sm font-bold text-grape">
-                {user.plan === 'premium' ? '👑 Premium' : user.plan === 'event' ? '🎉 Pass Événement' : `⚡ ${aiQuota - aiUsed}/${aiQuota} IA`}
+                {user.plan === 'premium' ? '👑 Premium' : user.plan === 'event' ? '🎉 Pass Événement' : `⚡ ${Math.max(0, aiQuota - aiUsed) + aiBonus} IA`}
               </span>
               <button onClick={() => { logout(); navigate('/'); }} className="font-bold text-slate-400 hover:text-cherry">Déconnexion</button>
             </>

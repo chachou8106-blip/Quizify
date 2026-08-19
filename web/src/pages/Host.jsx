@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
 import AudioClip from '../components/AudioClip';
+import ShareButtons from '../components/ShareButtons';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
 
@@ -188,6 +189,7 @@ export default function Host() {
             ))}
           </div>
         )}
+        <ShareButtons title={game.title} leaderboard={podium} />
         <Link to="/quizzes" className="btn-primary">Rejouer avec un autre quiz 🎯</Link>
       </div>
     );

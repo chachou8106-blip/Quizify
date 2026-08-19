@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
+import { Link } from 'react-router-dom';
+import ShareButtons from '../components/ShareButtons';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
 const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-slate-900', 'bg-minty'];
@@ -17,6 +19,7 @@ export default function Join() {
   const [myAnswer, setMyAnswer] = useState(null);
   const [reveal, setReveal] = useState(null);
   const [podium, setPodium] = useState(null);
+  const [reward, setReward] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const wsRef = useRef(null);
   const timerRef = useRef(null);
@@ -52,8 +55,10 @@ export default function Join() {
         clearInterval(timerRef.current);
         setReveal(m); setState('reveal');
       }
+      if (m.t === 'reward') setReward(m);
       if (m.t === 'podium') {
         clearInterval(timerRef.current);
+        if (m.title) setGame((g) => ({ ...g, title: m.title }));
         setPodium(m.leaderboard); setState('podium');
         const rank = m.leaderboard.findIndex((p) => p.name === name.trim());
         if (rank >= 0 && rank < 3) confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
@@ -169,6 +174,17 @@ export default function Join() {
             </div>
           ))}
         </div>
+
+        {reward && (
+          <div className="card border-4 border-sunny bg-sunny-light/40">
+            <p className="font-display text-xl font-extrabold">🎁 Champion·ne, tu gagnes {reward.credits} quiz IA gratuits !</p>
+            <p className="mt-1 font-semibold text-slate-500">Crée ton compte (30 s) pour les récupérer et organiser TA revanche.</p>
+            <Link to={`/reward/${reward.code}`} className="btn-primary mt-3">🎁 Récupérer mon cadeau</Link>
+          </div>
+        )}
+
+        <ShareButtons title={game.title} leaderboard={podium} />
+        <Link to="/create" className="block font-bold text-grape underline">✨ Et si le prochain quiz, c'était le tien ?</Link>
       </div>
     );
   }

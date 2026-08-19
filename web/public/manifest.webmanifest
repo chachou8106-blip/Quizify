@@ -1,0 +1,17 @@
+{
+  "name": "Quizify — La fête commence par une question",
+  "short_name": "Quizify",
+  "description": "Quiz IA, blind tests et parties live pour tes soirées. Sans compte pour les joueurs.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF9F0",
+  "theme_color": "#7C3AED",
+  "lang": "fr",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

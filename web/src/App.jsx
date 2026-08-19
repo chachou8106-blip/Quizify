@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Host from './pages/Host';
 import Join from './pages/Join';
+import Reward from './pages/Reward';
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/host/:pin" element={<Host />} />
           <Route path="/join" element={<Join />} />
           <Route path="/join/:pin" element={<Join />} />
+          <Route path="/reward/:code" element={<Reward />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
