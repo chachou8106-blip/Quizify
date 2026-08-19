@@ -19,10 +19,10 @@ export default function Home() {
         <span className="deco left-8 bottom-2 animate-floaty text-3xl" style={{ animationDelay: '1.4s' }}>🎵</span>
         <span className="deco right-10 bottom-8 animate-floaty text-4xl" style={{ animationDelay: '0.6s' }}>❓</span>
         <img src="/logo.svg" alt="Quizify" className="mx-auto mb-4 h-20 w-20 animate-floaty" />
-        <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl">
+        <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-tight text-white sm:text-5xl">
           La fête commence<br className="hidden sm:block" /> par une <span className="bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">question</span> ✨
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg font-semibold text-slate-500">
+        <p className="mx-auto mt-4 max-w-xl text-lg font-semibold text-white/60">
           Quiz IA sur n'importe quel sujet, blind tests avec de la vraie musique, parties en direct sur les téléphones de tes invités. Sans appli à installer.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -35,7 +35,7 @@ export default function Home() {
       {/* Join box */}
       <section className="card mx-auto max-w-md border-4 border-sunny text-center">
         <h2 className="font-display text-2xl font-extrabold">🎮 Rejoindre une partie</h2>
-        <p className="mt-1 font-semibold text-slate-500">Entre le code affiché par l'animateur</p>
+        <p className="mt-1 font-semibold text-white/60">Entre le code affiché par l'animateur</p>
         <form onSubmit={join} className="mt-4 flex gap-2">
           <input
             value={pin}
@@ -58,7 +58,7 @@ export default function Home() {
           <div key={title} className="card text-center">
             <div className="text-5xl">{emoji}</div>
             <h3 className="mt-3 font-display text-xl font-extrabold">{title}</h3>
-            <p className="mt-2 font-semibold text-slate-500">{desc}</p>
+            <p className="mt-2 font-semibold text-white/60">{desc}</p>
           </div>
         ))}
       </section>
@@ -75,7 +75,7 @@ export default function Home() {
             <div key={n} className="card text-center">
               <span className={`${color} mx-auto flex h-12 w-12 items-center justify-center rounded-full font-display text-2xl font-extrabold text-white`}>{n}</span>
               <h3 className="mt-3 font-display text-xl font-extrabold">{title}</h3>
-              <p className="mt-2 font-semibold text-slate-500">{desc}</p>
+              <p className="mt-2 font-semibold text-white/60">{desc}</p>
             </div>
           ))}
         </div>

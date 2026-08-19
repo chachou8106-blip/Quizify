@@ -30,8 +30,8 @@ export default function Login() {
         {error && <p className="font-bold text-cherry">{error}</p>}
         <button disabled={loading} className="btn-primary w-full">{loading ? '⏳…' : 'Connexion'}</button>
       </form>
-      <p className="text-center font-semibold text-slate-500">
-        Pas encore de compte ? <Link to={`/signup?next=${params.get('next') || '/'}`} className="font-bold text-grape">Inscription gratuite</Link>
+      <p className="text-center font-semibold text-white/60">
+        Pas encore de compte ? <Link to={`/signup?next=${params.get('next') || '/'}`} className="font-bold text-grape-light">Inscription gratuite</Link>
       </p>
     </div>
   );

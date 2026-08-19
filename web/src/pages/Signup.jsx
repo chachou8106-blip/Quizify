@@ -27,7 +27,7 @@ export default function Signup() {
       <div className="text-center">
         <div className="text-5xl">🎉</div>
         <h1 className="font-display text-3xl font-extrabold">Crée ton compte gratuit</h1>
-        <p className="mt-1 font-semibold text-slate-500">3 quiz IA offerts chaque mois, sans carte bancaire.</p>
+        <p className="mt-1 font-semibold text-white/60">3 quiz IA offerts chaque mois, sans carte bancaire.</p>
       </div>
       <form onSubmit={submit} className="card space-y-4">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton prénom" className="input" required />
@@ -36,8 +36,8 @@ export default function Signup() {
         {error && <p className="font-bold text-cherry">{error}</p>}
         <button disabled={loading} className="btn-primary w-full">{loading ? '⏳…' : 'C\'est parti ! 🚀'}</button>
       </form>
-      <p className="text-center font-semibold text-slate-500">
-        Déjà un compte ? <Link to={`/login?next=${params.get('next') || '/'}`} className="font-bold text-grape">Connexion</Link>
+      <p className="text-center font-semibold text-white/60">
+        Déjà un compte ? <Link to={`/login?next=${params.get('next') || '/'}`} className="font-bold text-grape-light">Connexion</Link>
       </p>
     </div>
   );

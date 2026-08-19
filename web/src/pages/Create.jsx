@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
+import CountPicker from '../components/CountPicker';
 
 const TYPES = [
   { value: 'mixed', label: '🎲 Mix surprise', hint: 'Tous les styles mélangés' },
@@ -21,10 +22,11 @@ const TYPES = [
 export default function Create() {
   const { user, ready, refresh } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [categories, setCategories] = useState({});
-  const [category, setCategory] = useState('free');
+  const [category, setCategory] = useState(params.get('cat') || 'free');
   const [topic, setTopic] = useState('');
-  const [type, setType] = useState('mixed');
+  const [type, setType] = useState(params.get('type') || 'mixed');
   const [count, setCount] = useState(8);
   const [difficulty, setDifficulty] = useState('medium');
   const [showAllCats, setShowAllCats] = useState(false);
@@ -80,7 +82,7 @@ export default function Create() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="text-center">
         <h1 className="font-display text-3xl font-extrabold sm:text-4xl">🤖 Crée ton quiz</h1>
-        <p className="mt-1 font-semibold text-slate-500">N'importe quel sujet, prêt en 30 secondes.</p>
+        <p className="mt-1 font-semibold text-white/60">N'importe quel sujet, prêt en 30 secondes.</p>
       </div>
 
       {/* Étape 1 — Sujet */}
@@ -96,21 +98,21 @@ export default function Create() {
 
       {/* Étape 2 — Catégorie (optionnelle) */}
       <div className="card space-y-3">
-        <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>Catégorie <span className="text-base font-bold text-slate-400">(optionnelle)</span></h2>
+        <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>Catégorie <span className="text-base font-bold text-white/50">(optionnelle)</span></h2>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <button
             onClick={() => setCategory('free')}
-            className={`rounded-2xl border-2 p-3 text-left transition-all ${category === 'free' ? 'border-grape bg-grape/10 shadow-card' : 'border-slate-200 bg-white hover:border-grape/50'}`}
+            className={`rounded-2xl border-2 p-3 text-left transition-all ${category === 'free' ? 'border-grape bg-grape/10 shadow-card' : 'border-white/15 bg-white/10 hover:border-grape/50'}`}
           >
             <div className="text-2xl">✨</div>
             <div className="font-display text-sm font-extrabold">Sujet libre</div>
-            <div className="text-xs font-semibold text-slate-400">Sans catégorie</div>
+            <div className="text-xs font-semibold text-white/50">Sans catégorie</div>
           </button>
           {visibleCats.map(([id, cat]) => (
             <button
               key={id}
               onClick={() => setCategory(id)}
-              className={`rounded-2xl border-2 p-3 text-left transition-all ${category === id ? 'shadow-card' : 'border-slate-200 bg-white'}`}
+              className={`rounded-2xl border-2 p-3 text-left transition-all ${category === id ? 'shadow-card' : 'border-white/15 bg-white/10'}`}
               style={category === id ? { borderColor: cat.color, backgroundColor: cat.color + '18' } : {}}
             >
               <div className="text-2xl">{cat.emoji}</div>
@@ -118,7 +120,7 @@ export default function Create() {
             </button>
           ))}
         </div>
-        <button onClick={() => setShowAllCats(!showAllCats)} className="w-full rounded-xl py-2 font-bold text-grape hover:bg-grape/5">
+        <button onClick={() => setShowAllCats(!showAllCats)} className="w-full rounded-xl py-2 font-bold text-grape-light hover:bg-white/5">
           {showAllCats ? '▲ Réduire' : `▼ Voir les ${catEntries.length - 7} autres catégories`}
         </button>
       </div>
@@ -126,22 +128,20 @@ export default function Create() {
       {/* Étape 3 — Réglages */}
       <div className="card space-y-4">
         <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Le style de jeu</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-1">
-            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Type de quiz</label>
+            <label className="mb-1.5 block text-sm font-extrabold text-white/60">Type de quiz</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="input">
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
-            {selectedType && <p className="mt-1 text-xs font-bold text-slate-400">{selectedType.hint}</p>}
+            {selectedType && <p className="mt-1 text-xs font-bold text-white/50">{selectedType.hint}</p>}
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Questions</label>
-            <select value={count} onChange={(e) => setCount(+e.target.value)} className="input">
-              {[5, 8, 10, 12, 15, 20].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+            <label className="mb-1.5 block text-sm font-extrabold text-white/60">Questions</label>
+            <CountPicker value={count} onChange={setCount} />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Difficulté</label>
+            <label className="mb-1.5 block text-sm font-extrabold text-white/60">Difficulté</label>
             <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="input">
               <option value="easy">😊 Facile</option>
               <option value="medium">🤔 Moyen</option>
@@ -151,9 +151,9 @@ export default function Create() {
         </div>
 
         {error === 'quota' ? (
-          <div className="rounded-2xl bg-sunny-light p-4 text-center font-bold">
+          <div className="rounded-2xl bg-sunny/15 p-4 text-center font-bold">
             ⚡ Tu as utilisé tes 3 générations gratuites du mois.{' '}
-            <Link to="/pricing" className="text-grape underline">Passe en Premium</Link> pour générer sans limite !
+            <Link to="/pricing" className="text-grape-light underline">Passe en Premium</Link> pour générer sans limite !
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
 
@@ -175,14 +175,14 @@ export default function Create() {
           </div>
           <ol className="space-y-3">
             {questions.map((q, i) => (
-              <li key={i} className="rounded-2xl bg-slate-50 p-4">
+              <li key={i} className="rounded-2xl bg-white/5 p-4">
                 <p className="font-bold">{i + 1}. {q.question}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {q.options.map((o, j) => (
-                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${!hideAnswers && j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white text-slate-500'}`}>{o}</span>
+                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${!hideAnswers && j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white/10 text-white/60'}`}>{o}</span>
                   ))}
                 </div>
-                {!hideAnswers && q.explanation && <p className="mt-2 text-sm font-semibold text-slate-400">💡 {q.explanation}</p>}
+                {!hideAnswers && q.explanation && <p className="mt-2 text-sm font-semibold text-white/50">💡 {q.explanation}</p>}
               </li>
             ))}
           </ol>
@@ -190,7 +190,7 @@ export default function Create() {
             <button onClick={save} disabled={loading} className="btn-pink w-full text-xl">💾 Enregistrer ce quiz</button>
           ) : (
             <div className="space-y-3 rounded-2xl bg-grape/5 p-4">
-              <p className="font-display text-lg font-extrabold text-grape">✅ Quiz enregistré ! Et maintenant :</p>
+              <p className="font-display text-lg font-extrabold text-grape-light">✅ Quiz enregistré ! Et maintenant :</p>
               <QuizActions quiz={saved} />
             </div>
           )}

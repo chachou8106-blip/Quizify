@@ -25,7 +25,7 @@ export default function Pricing() {
 
   const plans = [
     {
-      name: 'Gratuit', price: '0 €', emoji: '🌱', border: 'border-slate-200',
+      name: 'Gratuit', price: '0 €', emoji: '🌱', border: 'border-white/15',
       features: ['3 quiz IA par mois', 'Parties live jusqu\'à 10 joueurs', 'Partage par lien illimité', 'Quiz jouables en solo sans limite'],
       cta: user ? null : { label: 'Créer mon compte', to: '/signup' },
     },
@@ -45,7 +45,7 @@ export default function Pricing() {
     <div className="space-y-10">
       <div className="text-center">
         <h1 className="font-display text-4xl font-extrabold">Des tarifs simples et joyeux 🎈</h1>
-        <p className="mt-2 text-lg font-semibold text-slate-500">Les joueurs ne paient jamais. Seul l'animateur choisit son plan.</p>
+        <p className="mt-2 text-lg font-semibold text-white/60">Les joueurs ne paient jamais. Seul l'animateur choisit son plan.</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
@@ -55,10 +55,10 @@ export default function Pricing() {
             <div className="text-center">
               <div className="text-5xl">{p.emoji}</div>
               <h2 className="mt-2 font-display text-2xl font-extrabold">{p.name}</h2>
-              <p className="font-display text-3xl font-extrabold text-grape">{p.price}</p>
+              <p className="font-display text-3xl font-extrabold text-grape-light">{p.price}</p>
             </div>
             <ul className="mt-5 flex-1 space-y-2">
-              {p.features.map((f) => <li key={f} className="font-semibold text-slate-600">✅ {f}</li>)}
+              {p.features.map((f) => <li key={f} className="font-semibold text-white/75">✅ {f}</li>)}
             </ul>
             {p.cta && (p.cta.to
               ? <Link to={p.cta.to} className="btn-primary mt-5 w-full">{p.cta.label}</Link>
@@ -69,7 +69,7 @@ export default function Pricing() {
 
       <div className="card mx-auto max-w-lg text-center">
         <h2 className="font-display text-2xl font-extrabold">🔑 Déjà acheté ?</h2>
-        <p className="mt-1 font-semibold text-slate-500">Colle la clé de licence reçue par email après ton achat Gumroad :</p>
+        <p className="mt-1 font-semibold text-white/60">Colle la clé de licence reçue par email après ton achat Gumroad :</p>
         <form onSubmit={activate} className="mt-4 flex flex-col gap-3 sm:flex-row">
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="XXXXXXXX-XXXXXXXX-…" className="input flex-1 text-center font-mono" />
           <button disabled={loading || !key.trim()} className="btn-primary">{loading ? '⏳' : 'Activer'}</button>

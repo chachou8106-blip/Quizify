@@ -7,7 +7,7 @@ import ShareButtons from '../components/ShareButtons';
 import { useAuth } from '../store';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
-const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-slate-900', 'bg-minty'];
+const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-white', 'bg-minty'];
 
 export default function Host() {
   const { pin } = useParams();
@@ -82,8 +82,8 @@ export default function Host() {
       <div className="mx-auto max-w-2xl space-y-6 text-center">
         <h1 className="font-display text-3xl font-extrabold">« {game.title || '…'} »</h1>
         <div className="card border-4 border-grape">
-          <p className="font-display text-xl font-extrabold text-slate-500">Rejoignez sur <span className="text-grape">{location.host}/join</span> avec le code :</p>
-          <p className="my-4 font-display text-7xl font-extrabold tracking-widest text-grape">{pin.slice(0, 3)} {pin.slice(3)}</p>
+          <p className="font-display text-xl font-extrabold text-white/60">Rejoignez sur <span className="text-grape-light">{location.host}/join</span> avec le code :</p>
+          <p className="my-4 font-display text-7xl font-extrabold tracking-widest text-grape-light">{pin.slice(0, 3)} {pin.slice(3)}</p>
           <button onClick={() => navigator.clipboard?.writeText(joinUrl)} className="btn-ghost !py-2 !text-sm">🔗 Copier le lien d'invitation</button>
         </div>
         <div className="card">
@@ -92,14 +92,14 @@ export default function Host() {
             {(game.players || []).map((p) => (
               <span key={p} className="animate-floaty rounded-full bg-bubble/15 px-4 py-2 font-bold text-bubble">{p}</span>
             ))}
-            {(game.players || []).length === 0 && <p className="font-semibold text-slate-400">En attente des joueurs… 👀</p>}
+            {(game.players || []).length === 0 && <p className="font-semibold text-white/50">En attente des joueurs… 👀</p>}
           </div>
         </div>
         {error && <p className="font-bold text-cherry">{error}</p>}
         <button
           onClick={() => wsRef.current?.send(JSON.stringify({ t: 'hostJoin', name: user?.name || 'Animateur' }))}
           disabled={hostPlays}
-          className={`w-full rounded-2xl border-2 py-3 font-display text-lg font-extrabold transition-all ${hostPlays ? 'border-minty bg-minty-light text-emerald-900' : 'border-grape/40 bg-white text-grape hover:border-grape'}`}
+          className={`w-full rounded-2xl border-2 py-3 font-display text-lg font-extrabold transition-all ${hostPlays ? 'border-minty bg-minty/25 text-emerald-900' : 'border-grape/40 bg-white/10 text-grape-light hover:border-grape'}`}
         >
           {hostPlays ? `✅ Tu joues aussi (${user?.name || 'Animateur'}) !` : '🙋 Je joue aussi !'}
         </button>
@@ -156,15 +156,15 @@ export default function Host() {
           {(q?.options || []).map((o, i) => (
             <div key={i} className={`card flex items-center justify-between !py-4 font-display text-xl font-extrabold ${i === reveal.correct ? 'border-4 border-minty' : 'opacity-50'}`}>
               <span>{SHAPES[i % 4]} {o}</span>
-              <span className="text-slate-400">{reveal.counts[i]} vote(s)</span>
+              <span className="text-white/50">{reveal.counts[i]} vote(s)</span>
             </div>
           ))}
         </div>
-        {reveal.explanation && <p className="card bg-sunny-light font-bold">💡 {reveal.explanation}</p>}
+        {reveal.explanation && <p className="card bg-sunny/15 font-bold">💡 {reveal.explanation}</p>}
         <div className="card">
           <h3 className="mb-3 font-display text-xl font-extrabold">🏆 Classement</h3>
           {reveal.leaderboard.slice(0, 5).map((p, i) => (
-            <div key={p.name} className="flex items-center justify-between border-b border-slate-100 py-2 font-bold last:border-0">
+            <div key={p.name} className="flex items-center justify-between border-b border-white/10 py-2 font-bold last:border-0">
               <span>{['🥇', '🥈', '🥉'][i] || `${i + 1}.`} {p.name}</span>
               <span>{p.score} pts {p.delta > 0 && <span className="text-minty">(+{p.delta})</span>}</span>
             </div>
@@ -184,31 +184,31 @@ export default function Host() {
         <h1 className="font-display text-4xl font-extrabold">🏆 PODIUM 🏆</h1>
         <div className="flex items-end justify-center gap-3">
           {second && (
-            <div className="flex-1 rounded-t-3xl bg-slate-300 p-4 pt-6">
+            <div className="flex-1 rounded-t-3xl bg-slate-300 p-4 pt-6 text-slate-900">
               <div className="text-4xl">🥈</div>
               <p className="font-display text-xl font-extrabold">{second.name}</p>
-              <p className="font-bold text-slate-600">{second.score} pts</p>
+              <p className="font-bold text-white/75">{second.score} pts</p>
             </div>
           )}
           {first && (
-            <div className="flex-1 rounded-t-3xl bg-sunny p-4 pb-10 pt-8">
+            <div className="flex-1 rounded-t-3xl bg-sunny p-4 pb-10 pt-8 text-slate-900">
               <div className="animate-wiggle text-6xl">👑</div>
               <p className="font-display text-2xl font-extrabold">{first.name}</p>
-              <p className="font-bold text-slate-700">{first.score} pts</p>
+              <p className="font-bold text-white/85">{first.score} pts</p>
             </div>
           )}
           {third && (
-            <div className="flex-1 rounded-t-3xl bg-orange-300 p-4 pt-4">
+            <div className="flex-1 rounded-t-3xl bg-orange-300 p-4 pt-4 text-slate-900">
               <div className="text-4xl">🥉</div>
               <p className="font-display text-xl font-extrabold">{third.name}</p>
-              <p className="font-bold text-slate-600">{third.score} pts</p>
+              <p className="font-bold text-white/75">{third.score} pts</p>
             </div>
           )}
         </div>
         {podium.length > 3 && (
           <div className="card text-left">
             {podium.slice(3, 10).map((p, i) => (
-              <div key={p.name} className="flex justify-between border-b border-slate-100 py-1.5 font-bold last:border-0">
+              <div key={p.name} className="flex justify-between border-b border-white/10 py-1.5 font-bold last:border-0">
                 <span>{i + 4}. {p.name}</span><span>{p.score} pts</span>
               </div>
             ))}

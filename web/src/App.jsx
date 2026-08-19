@@ -13,6 +13,7 @@ import Signup from './pages/Signup';
 import Host from './pages/Host';
 import Join from './pages/Join';
 import Reward from './pages/Reward';
+import Explore from './pages/Explore';
 
 export default function App() {
   const location = useLocation();
@@ -23,6 +24,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<Create />} />
+          <Route path="/explore" element={<Explore />} />
           <Route path="/birthday" element={<Birthday />} />
           <Route path="/blindtest" element={<BlindTest />} />
           <Route path="/play/:id" element={<Player mode="own" />} />

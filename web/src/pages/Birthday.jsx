@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
+import CountPicker from '../components/CountPicker';
 
 export default function Birthday() {
   const { user, ready, refresh } = useAuth();
@@ -63,7 +64,7 @@ export default function Birthday() {
       <div className="text-center">
         <div className="animate-wiggle text-6xl">🎂</div>
         <h1 className="font-display text-3xl font-extrabold sm:text-4xl">Le quiz anniversaire</h1>
-        <p className="mt-2 font-semibold text-slate-500">Qui connaît le mieux la star du jour ? Raconte des anecdotes, l'IA écrit le quiz — et invente des mauvaises réponses très plausibles 😈</p>
+        <p className="mt-2 font-semibold text-white/60">Qui connaît le mieux la star du jour ? Raconte des anecdotes, l'IA écrit le quiz — et invente des mauvaises réponses très plausibles 😈</p>
       </div>
 
       <div className="card space-y-5">
@@ -82,14 +83,12 @@ export default function Birthday() {
         </div>
         <div>
           <h2 className="mb-2 font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Nombre de questions</h2>
-          <select value={count} onChange={(e) => setCount(+e.target.value)} className="input sm:w-40">
-            {[5, 8, 10, 12, 15].map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <CountPicker value={count} onChange={setCount} max={15} />
         </div>
 
         {error === 'quota' ? (
-          <div className="rounded-2xl bg-sunny-light p-4 text-center font-bold">
-            ⚡ Générations gratuites du mois épuisées. <Link to="/pricing" className="text-grape underline">Le Pass Événement (14,99 €)</Link> débloque tout pour ta fête !
+          <div className="rounded-2xl bg-sunny/15 p-4 text-center font-bold">
+            ⚡ Générations gratuites du mois épuisées. <Link to="/pricing" className="text-grape-light underline">Le Pass Événement (14,99 €)</Link> débloque tout pour ta fête !
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
 
@@ -101,14 +100,14 @@ export default function Birthday() {
       {questions && (
         <div className="card space-y-4">
           <h2 className="font-display text-2xl font-extrabold">Aperçu — vérifie que tout est juste 👀</h2>
-          <p className="font-semibold text-slate-400">💡 Ici tu vois les réponses pour vérifier les anecdotes — normal, c'est TON quiz sur elle. En partie live, active « 🙋 Je joue aussi » pour participer quand même !</p>
+          <p className="font-semibold text-white/50">💡 Ici tu vois les réponses pour vérifier les anecdotes — normal, c'est TON quiz sur elle. En partie live, active « 🙋 Je joue aussi » pour participer quand même !</p>
           <ol className="space-y-3">
             {questions.map((q, i) => (
-              <li key={i} className="rounded-2xl bg-slate-50 p-4">
+              <li key={i} className="rounded-2xl bg-white/5 p-4">
                 <p className="font-bold">{i + 1}. {q.question}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {q.options.map((o, j) => (
-                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white text-slate-500'}`}>{o}</span>
+                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white/10 text-white/60'}`}>{o}</span>
                   ))}
                 </div>
               </li>

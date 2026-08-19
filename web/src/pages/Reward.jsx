@@ -34,11 +34,11 @@ export default function Reward() {
     <div className="mx-auto max-w-md space-y-6 pt-8 text-center">
       <div className="animate-wiggle text-7xl">🎁</div>
       <h1 className="font-display text-3xl font-extrabold">Ta récompense de champion·ne</h1>
-      {status === 'claiming' && <p className="text-xl font-bold text-slate-500">⏳ Vérification du code…</p>}
+      {status === 'claiming' && <p className="text-xl font-bold text-white/60">⏳ Vérification du code…</p>}
       {status === 'done' && (
         <div className="card border-4 border-minty">
           <p className="font-display text-2xl font-extrabold text-minty">✅ {msg}</p>
-          <p className="mt-2 font-semibold text-slate-500">Utilise-les pour créer tes propres quiz et prendre ta revanche.</p>
+          <p className="mt-2 font-semibold text-white/60">Utilise-les pour créer tes propres quiz et prendre ta revanche.</p>
           <Link to="/create" className="btn-primary mt-4">✨ Créer mon premier quiz</Link>
         </div>
       )}

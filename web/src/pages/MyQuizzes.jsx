@@ -44,7 +44,7 @@ export default function MyQuizzes() {
       {quizzes && quizzes.length === 0 && (
         <div className="card text-center">
           <div className="text-6xl">🌱</div>
-          <p className="mt-3 text-xl font-bold text-slate-500">Aucun quiz pour l'instant.</p>
+          <p className="mt-3 text-xl font-bold text-white/60">Aucun quiz pour l'instant.</p>
           <Link to="/create" className="btn-primary mt-4">Créer mon premier quiz ✨</Link>
         </div>
       )}
@@ -53,9 +53,9 @@ export default function MyQuizzes() {
           <div key={q.id} className="card">
             <div className="flex items-start justify-between gap-2">
               <h3 className="font-display text-xl font-extrabold">{q.emoji} {q.title}</h3>
-              <button onClick={() => del(q.id)} className="text-slate-300 hover:text-cherry" title="Supprimer">🗑</button>
+              <button onClick={() => del(q.id)} className="text-white/40 hover:text-cherry" title="Supprimer">🗑</button>
             </div>
-            <p className="mt-1 text-sm font-bold text-slate-400">{q.questionCount} questions · {q.plays} partie(s) jouée(s)</p>
+            <p className="mt-1 text-sm font-bold text-white/50">{q.questionCount} questions · {q.plays} partie(s) jouée(s)</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link to={`/play/${q.id}`} className="btn-ghost !px-3 !py-1.5 !text-sm">▶️ Solo</Link>
               <button onClick={() => hostLive(q.id)} className="btn-pink !px-3 !py-1.5 !text-sm">🎉 Live</button>

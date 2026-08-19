@@ -54,7 +54,7 @@ export default function Player({ mode }) {
       <div className="mx-auto max-w-md space-y-6 text-center">
         <div className="text-7xl">{pct >= 80 ? '🏆' : pct >= 50 ? '🎉' : '💪'}</div>
         <h1 className="font-display text-4xl font-extrabold">{score} / {total}</h1>
-        <p className="text-xl font-bold text-slate-500">
+        <p className="text-xl font-bold text-white/60">
           {pct >= 80 ? 'Incroyable, tu es imbattable !' : pct >= 50 ? 'Bien joué !' : 'Pas mal, retente ta chance !'}
         </p>
         <div className="flex justify-center gap-3">
@@ -68,10 +68,10 @@ export default function Player({ mode }) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div className="flex items-center justify-between font-display font-extrabold">
-        <span className="text-slate-400">{quiz.emoji} {quiz.title}</span>
+        <span className="text-white/50">{quiz.emoji} {quiz.title}</span>
         <span className="rounded-full bg-grape px-4 py-1 text-white">{idx + 1} / {total}</span>
       </div>
-      <div className="h-3 overflow-hidden rounded-full bg-slate-200">
+      <div className="h-3 overflow-hidden rounded-full bg-white/15">
         <div className="h-full rounded-full bg-gradient-to-r from-grape to-bubble transition-all" style={{ width: `${((idx + (picked !== null ? 1 : 0)) / total) * 100}%` }} />
       </div>
 
@@ -82,11 +82,11 @@ export default function Player({ mode }) {
         )}
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => {
-            let cls = 'border-slate-200 bg-white hover:border-grape';
+            let cls = 'border-white/15 bg-white/10 hover:border-grape';
             if (picked !== null) {
-              if (i === q.correct) cls = 'border-minty bg-minty-light';
-              else if (i === picked) cls = 'border-cherry bg-red-100';
-              else cls = 'border-slate-100 bg-slate-50 opacity-60';
+              if (i === q.correct) cls = 'border-minty bg-minty/25';
+              else if (i === picked) cls = 'border-cherry bg-cherry/25';
+              else cls = 'border-white/10 bg-white/5 opacity-60';
             }
             return (
               <button key={i} onClick={() => pick(i)} disabled={picked !== null}
@@ -101,7 +101,7 @@ export default function Player({ mode }) {
             <p className="font-display text-xl font-extrabold">
               {picked === q.correct ? '✅ Bonne réponse !' : `❌ Raté ! C'était : ${q.options[q.correct]}`}
             </p>
-            {q.explanation && <p className="rounded-2xl bg-sunny-light p-3 font-semibold">💡 {q.explanation}</p>}
+            {q.explanation && <p className="rounded-2xl bg-sunny/15 p-3 font-semibold">💡 {q.explanation}</p>}
             <button onClick={next} className="btn-primary w-full">{idx + 1 >= total ? '🏁 Voir mon score' : 'Question suivante →'}</button>
           </div>
         )}

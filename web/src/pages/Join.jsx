@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import ShareButtons from '../components/ShareButtons';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
-const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-slate-900', 'bg-minty'];
+const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-white', 'bg-minty'];
 
 export default function Join() {
   const { pin: pinParam } = useParams();
@@ -100,9 +100,9 @@ export default function Join() {
         <div className="animate-pulseBig text-6xl">🕺💃</div>
         <h1 className="font-display text-3xl font-extrabold">Tu es dans la partie !</h1>
         <div className="card">
-          <p className="text-xl font-bold text-slate-500">« {game.title} »</p>
-          <p className="mt-2 font-semibold text-slate-400">En attente du lancement par l'animateur…</p>
-          <p className="mt-4 font-display text-2xl font-extrabold text-grape">{game.players?.length || 1} joueur(s) 🎉</p>
+          <p className="text-xl font-bold text-white/60">« {game.title} »</p>
+          <p className="mt-2 font-semibold text-white/50">En attente du lancement par l'animateur…</p>
+          <p className="mt-4 font-display text-2xl font-extrabold text-grape-light">{game.players?.length || 1} joueur(s) 🎉</p>
         </div>
       </div>
     );
@@ -134,7 +134,7 @@ export default function Join() {
       <div className="mx-auto max-w-md space-y-6 pt-16 text-center">
         <div className="animate-wiggle text-7xl">🤞</div>
         <h1 className="font-display text-3xl font-extrabold">Réponse envoyée !</h1>
-        <p className="text-lg font-semibold text-slate-500">On attend les autres…</p>
+        <p className="text-lg font-semibold text-white/60">On attend les autres…</p>
       </div>
     );
   }
@@ -152,8 +152,8 @@ export default function Join() {
           <p className="font-display text-xl font-extrabold text-orange-500">🔥 Série de {mine.streak} bonnes réponses !</p>
         )}
         {reveal.explanation && <p className="card font-semibold">💡 {reveal.explanation}</p>}
-        {mine && <p className="text-xl font-bold text-slate-500">Tu es {rank === 1 ? '🥇 1er' : rank === 2 ? '🥈 2e' : rank === 3 ? '🥉 3e' : `${rank}e`} avec {mine.score} pts</p>}
-        <p className="font-semibold text-slate-400">{reveal.isLast ? 'Résultats finaux dans un instant…' : 'Prochaine question bientôt…'}</p>
+        {mine && <p className="text-xl font-bold text-white/60">Tu es {rank === 1 ? '🥇 1er' : rank === 2 ? '🥈 2e' : rank === 3 ? '🥉 3e' : `${rank}e`} avec {mine.score} pts</p>}
+        <p className="font-semibold text-white/50">{reveal.isLast ? 'Résultats finaux dans un instant…' : 'Prochaine question bientôt…'}</p>
       </div>
     );
   }
@@ -168,7 +168,7 @@ export default function Join() {
         </h1>
         <div className="card space-y-2 text-left">
           {podium.slice(0, 10).map((p, i) => (
-            <div key={p.name} className={`flex items-center justify-between rounded-xl px-4 py-2 font-bold ${p.name === name.trim() ? 'bg-grape/10 text-grape' : ''}`}>
+            <div key={p.name} className={`flex items-center justify-between rounded-xl px-4 py-2 font-bold ${p.name === name.trim() ? 'bg-grape/10 text-grape-light' : ''}`}>
               <span>{['🥇', '🥈', '🥉'][i] || `${i + 1}.`} {p.name}</span>
               <span>{p.score} pts</span>
             </div>
@@ -176,15 +176,15 @@ export default function Join() {
         </div>
 
         {reward && (
-          <div className="card border-4 border-sunny bg-sunny-light/40">
+          <div className="card border-4 border-sunny bg-sunny/15/40">
             <p className="font-display text-xl font-extrabold">🎁 Champion·ne, tu gagnes {reward.credits} quiz IA gratuits !</p>
-            <p className="mt-1 font-semibold text-slate-500">Crée ton compte (30 s) pour les récupérer et organiser TA revanche.</p>
+            <p className="mt-1 font-semibold text-white/60">Crée ton compte (30 s) pour les récupérer et organiser TA revanche.</p>
             <Link to={`/reward/${reward.code}`} className="btn-primary mt-3">🎁 Récupérer mon cadeau</Link>
           </div>
         )}
 
         <ShareButtons title={game.title} leaderboard={podium} />
-        <Link to="/create" className="block font-bold text-grape underline">✨ Et si le prochain quiz, c'était le tien ?</Link>
+        <Link to="/create" className="block font-bold text-grape-light underline">✨ Et si le prochain quiz, c'était le tien ?</Link>
       </div>
     );
   }
