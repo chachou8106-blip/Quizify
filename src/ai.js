@@ -22,6 +22,12 @@ export const CATEGORIES = {
   stars: { name: 'Célébrités', emoji: '🌟', color: '#EAB308' },
   kids: { name: 'Spécial Enfants', emoji: '🧸', color: '#FB7185' },
   retro: { name: 'Années 80/90/2000', emoji: '📼', color: '#7C3AED' },
+  space: { name: 'Espace & Astronomie', emoji: '🌌', color: '#4338CA' },
+  body: { name: 'Corps Humain & Santé', emoji: '🫀', color: '#DC2626' },
+  mythology: { name: 'Mythologie', emoji: '⚡', color: '#B45309' },
+  tv: { name: 'Télé & Émissions', emoji: '📺', color: '#0891B2' },
+  motors: { name: 'Auto & Moto', emoji: '🏎️', color: '#334155' },
+  couples: { name: 'Couples & Mariage', emoji: '💍', color: '#E11D48' },
   birthday: { name: 'Anniversaire', emoji: '🎂', color: '#F43F5E' },
   blindtest: { name: 'Blind Test', emoji: '🎧', color: '#0EA5E9' },
 };
@@ -44,6 +50,9 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
     trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
     emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
     riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
+    chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.`,
+    intru: `C'est un quiz TROUVE L'INTRUS : chaque "question" commence par "Trouve l'intrus :" suivi du thème (ex: "Trouve l'intrus : ces artistes ont tous gagné un Grammy… sauf un !"). Les 4 "options" partagent toutes un point commun SAUF une (l'intrus = la bonne réponse). L'explication révèle le point commun.`,
+    mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs) et "Trouve l'intrus". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
     multipleChoice: `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`,
   };
   const typeRules = TYPE_RULES[type] || TYPE_RULES.multipleChoice;
@@ -142,7 +151,7 @@ export async function generateQuestions(env, opts) {
     try {
       const res = await env.AI.run(MODEL, {
         messages: [
-          { role: 'system', content: 'Tu réponds uniquement en JSON valide, sans aucun texte hors du JSON.' },
+          { role: 'system', content: 'Tu réponds uniquement en JSON valide, sans aucun texte hors du JSON. Ton contenu est toujours adapté à un public familial : jamais vulgaire, choquant ou inapproprié, drôle et bienveillant.' },
           { role: 'user', content: prompt },
         ],
         max_tokens: 4096,

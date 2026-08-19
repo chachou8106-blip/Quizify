@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { api } from '../api';
+import AudioClip from '../components/AudioClip';
 
 // Solo play — for /play/:id (own quiz) and /s/:code (shared link).
 export default function Player({ mode }) {
@@ -33,7 +34,13 @@ export default function Player({ mode }) {
   const pick = (i) => {
     if (picked !== null) return;
     setPicked(i);
-    if (i === q.correct) setScore((s) => s + 1);
+    if (i === q.correct) {
+      setScore((s) => s + 1);
+      confetti({ particleCount: 45, spread: 65, origin: { y: 0.75 }, scalar: 0.8 });
+      navigator.vibrate?.(60);
+    } else {
+      navigator.vibrate?.([40, 60, 40]);
+    }
   };
 
   const next = () => {
@@ -71,7 +78,7 @@ export default function Player({ mode }) {
       <div className="card">
         <h2 className="font-display text-2xl font-extrabold">{q.question}</h2>
         {q.audioUrl && (
-          <audio key={idx} controls autoPlay src={q.audioUrl} className="mt-4 w-full" />
+          <AudioClip key={idx} autoPlay src={q.audioUrl} className="mt-4 w-full" />
         )}
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => {

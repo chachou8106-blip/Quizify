@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
+import AudioClip from '../components/AudioClip';
 
 const SUGGESTIONS = ['Années 80', 'Années 90', 'Hits 2000', 'Disney', 'Rap français', 'Rock', 'Variété française', 'Queen', 'Beyoncé', 'Johnny Hallyday'];
 
@@ -89,7 +90,7 @@ export default function BlindTest() {
                   {question.artwork && <img src={question.artwork} alt="" className="h-14 w-14 rounded-xl" />}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-bold">{i + 1}. {question.options[question.correct]}</p>
-                    <audio controls preload="none" src={question.audioUrl} className="mt-1 w-full" />
+                    <AudioClip src={question.audioUrl} className="mt-1 w-full" />
                   </div>
                 </div>
               </li>

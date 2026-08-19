@@ -70,6 +70,7 @@ export default function Join() {
     wsRef.current?.send(JSON.stringify({ t: 'answer', i }));
     setMyAnswer(i);
     setState('answered');
+    navigator.vibrate?.(40);
   };
 
   if (state === 'form') {
@@ -137,10 +138,14 @@ export default function Join() {
     const mine = reveal.leaderboard.find((p) => p.name === name.trim());
     const rank = reveal.leaderboard.findIndex((p) => p.name === name.trim()) + 1;
     const good = myAnswer === reveal.correct;
+    if (good) { navigator.vibrate?.([50, 40, 50]); }
     return (
       <div className="mx-auto max-w-md space-y-5 pt-8 text-center">
         <div className="text-7xl">{good ? '✅' : '❌'}</div>
         <h1 className="font-display text-3xl font-extrabold">{good ? `+${mine?.delta || 0} points !` : 'Raté !'}</h1>
+        {good && (mine?.streak || 0) >= 2 && (
+          <p className="font-display text-xl font-extrabold text-orange-500">🔥 Série de {mine.streak} bonnes réponses !</p>
+        )}
         {reveal.explanation && <p className="card font-semibold">💡 {reveal.explanation}</p>}
         {mine && <p className="text-xl font-bold text-slate-500">Tu es {rank === 1 ? '🥇 1er' : rank === 2 ? '🥈 2e' : rank === 3 ? '🥉 3e' : `${rank}e`} avec {mine.score} pts</p>}
         <p className="font-semibold text-slate-400">{reveal.isLast ? 'Résultats finaux dans un instant…' : 'Prochaine question bientôt…'}</p>

@@ -14,12 +14,12 @@ export default function Home() {
     <div className="space-y-14">
       {/* Hero */}
       <section className="pt-6 text-center">
-        <div className="mx-auto mb-4 w-fit animate-floaty text-7xl">🎯✨</div>
+        <img src="/logo.svg" alt="Quizify" className="mx-auto mb-4 h-20 w-20 animate-floaty" />
         <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl">
-          Crée des quiz <span className="text-grape">magiques</span> avec l'IA,<br className="hidden sm:block" /> joue en direct avec tes amis
+          La fête commence<br className="hidden sm:block" /> par une <span className="bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">question</span> ✨
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-lg font-semibold text-slate-500">
-          N'importe quel sujet. En quelques secondes. Tout le monde joue depuis son téléphone avec un simple code — sans télécharger d'appli.
+          Quiz IA sur n'importe quel sujet, blind tests avec de la vraie musique, parties en direct sur les téléphones de tes invités. Sans appli à installer.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <Link to="/create" className="btn-primary text-xl">🤖 Créer un quiz IA</Link>

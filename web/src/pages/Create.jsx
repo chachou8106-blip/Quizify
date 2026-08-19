@@ -95,9 +95,12 @@ export default function Create() {
             <label className="mb-2 block font-display font-extrabold">Type</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="input">
               <option value="multipleChoice">QCM (4 options)</option>
+              <option value="mixed">🎲 Mix surprise (tous les styles)</option>
               <option value="trueFalse">Vrai / Faux</option>
               <option value="emoji">😀 Devinette Emoji</option>
               <option value="riddle">🕵️ Qui suis-je ?</option>
+              <option value="chrono">🕰️ Lequel en premier ?</option>
+              <option value="intru">🔍 Trouve l'intrus</option>
             </select>
           </div>
           <div>

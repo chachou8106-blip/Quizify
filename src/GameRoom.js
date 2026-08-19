@@ -121,7 +121,13 @@ export class GameRoom extends DurableObject {
       const duration = game.qEnd - game.qStart;
       let points = 0;
       if (i === q.correct) {
-        points = Math.round(500 + 500 * Math.max(0, 1 - elapsed / duration));
+        // Speed points + streak bonus (combo of consecutive correct answers)
+        p.streak = (p.streak || 0) + 1;
+        const speed = Math.round(500 + 500 * Math.max(0, 1 - elapsed / duration));
+        const bonus = Math.min((p.streak - 1) * 50, 200);
+        points = speed + bonus;
+      } else {
+        p.streak = 0;
       }
       p.answers[qIdx] = { i, points };
       p.score += points;
@@ -214,6 +220,7 @@ export class GameRoom extends DurableObject {
       .map((p) => ({
         name: p.name,
         score: p.score,
+        streak: p.streak || 0,
         delta: qIdx !== null && p.answers[qIdx] ? p.answers[qIdx].points : 0,
       }))
       .sort((a, b) => b.score - a.score)

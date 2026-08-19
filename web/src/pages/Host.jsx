@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
+import AudioClip from '../components/AudioClip';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
 
@@ -103,7 +104,7 @@ export default function Host() {
         <div className="card text-center">
           <h2 className="font-display text-3xl font-extrabold">{q.question}</h2>
           {q.audioUrl && (
-            <audio key={q.idx} controls autoPlay src={q.audioUrl} className="mx-auto mt-4 w-full max-w-md" />
+            <AudioClip key={q.idx} autoPlay src={q.audioUrl} className="mx-auto mt-4 w-full max-w-md" />
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
