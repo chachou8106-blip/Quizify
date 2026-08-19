@@ -219,8 +219,18 @@ async function fetchTracksDeezer(term, limit = 25) {
 
 const normTxt = (s) => String(s).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
 
-// « Hits du moment » = Top Charts officiel Deezer (jamais de recherche textuelle).
+// « Hits du moment » = playlist officielle « Top France » (le vrai classement français),
+// avec le chart mondial Deezer en secours. Jamais de recherche textuelle.
 async function fetchChartTracks(limit = 60) {
+  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent('Top France')}&limit=10`);
+  const top = (search?.data || [])
+    .filter((p) => /top\s*france/i.test(p.title || '') && (p.nb_tracks || 0) >= 40)
+    .sort((a, b) => (b.fans || b.nb_tracks || 0) - (a.fans || a.nb_tracks || 0))[0];
+  if (top) {
+    const tr = await deezerJson(`/playlist/${top.id}/tracks?limit=${Math.min(limit, 100)}`);
+    const tracks = mapDeezerTracks(tr?.data);
+    if (tracks.length >= 10) return tracks;
+  }
   const data = await deezerJson(`/chart/0/tracks?limit=${limit}`);
   return mapDeezerTracks(data?.data);
 }
