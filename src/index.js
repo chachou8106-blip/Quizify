@@ -131,19 +131,47 @@ app.post('/api/ai/generate', auth, async (c) => {
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
 
-async function fetchTracks(term, limit = 25) {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&country=FR&limit=${limit}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Quizify/1.0' } });
-  if (!res.ok) return [];
+function cleanTitle(s) {
+  return String(s).replace(/\s*\(.*?(remaster|version|edit|mix|live|radio).*?\)/gi, '').trim();
+}
+
+async function fetchTracksDeezer(term, limit = 25) {
+  const url = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=${limit}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
+  if (!res.ok) return { status: res.status, tracks: [] };
   const data = await res.json().catch(() => ({}));
-  return (data.results || [])
+  const tracks = (data.data || [])
+    .filter((t) => t.preview && t.title && t.artist?.name)
+    .map((t) => ({
+      title: cleanTitle(t.title),
+      artist: t.artist.name,
+      preview: t.preview,
+      art: t.album?.cover_medium || '',
+    }));
+  return { status: res.status, tracks };
+}
+
+async function fetchTracksItunes(term, limit = 25) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&country=FR&limit=${limit}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
+  if (!res.ok) return { status: res.status, tracks: [] };
+  const data = await res.json().catch(() => ({}));
+  const tracks = (data.results || [])
     .filter((t) => t.previewUrl && t.trackName && t.artistName)
     .map((t) => ({
-      title: t.trackName.replace(/\s*\(.*?(remaster|version|edit|mix|live).*?\)/gi, '').trim(),
+      title: cleanTitle(t.trackName),
       artist: t.artistName,
       preview: t.previewUrl,
       art: (t.artworkUrl100 || '').replace('100x100', '300x300'),
     }));
+  return { status: res.status, tracks };
+}
+
+async function fetchTracks(term, limit = 25) {
+  const deezer = await fetchTracksDeezer(term, limit);
+  if (deezer.tracks.length >= 4) return deezer.tracks;
+  const itunes = await fetchTracksItunes(term, limit);
+  return [...deezer.tracks, ...itunes.tracks];
 }
 
 function shuffle(a) {
@@ -153,6 +181,17 @@ function shuffle(a) {
   }
   return a;
 }
+
+// Diagnostic sources musicales (protégé)
+app.get('/api/music/debug', async (c) => {
+  if (c.req.query('key') !== secret(c)) return c.json({ error: 'forbidden' }, 403);
+  const term = c.req.query('q') || 'queen';
+  const [deezer, itunes] = await Promise.all([fetchTracksDeezer(term, 5), fetchTracksItunes(term, 5)]);
+  return c.json({
+    deezer: { status: deezer.status, count: deezer.tracks.length, sample: deezer.tracks[0] || null },
+    itunes: { status: itunes.status, count: itunes.tracks.length, sample: itunes.tracks[0]?.title || null },
+  });
+});
 
 app.get('/api/music/blindtest', async (c) => {
   const q = (c.req.query('q') || '').trim();
