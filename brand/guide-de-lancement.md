@@ -6,7 +6,7 @@
 
 ## ✅ Déjà 100 % opérationnel (rien à faire)
 
-L'application complète sur **quizzalo.chachou8106.workers.dev** : quiz IA vérifiés (26 catégories, 11 types), calcul mental garanti juste, blind tests (38 ambiances, extraits 15 s), parties live avec code PIN, mode animateur-joueur, récompenses des vainqueurs, partage WhatsApp du podium, app installable (PWA), **Studio Shorts intégré** (menu 🍔 → Studio Shorts 🎬 : n'importe quel quiz devient une vidéo verticale MP4 avec musique, générée sur ton téléphone). Comptes de Chachou et Nicole : Premium à vie.
+L'application complète sur **quizify.chachou8106.workers.dev** : quiz IA vérifiés (26 catégories, 11 types), calcul mental garanti juste, blind tests (38 ambiances, extraits 15 s), parties live avec code PIN, mode animateur-joueur, récompenses des vainqueurs, partage WhatsApp du podium, app installable (PWA), **Studio Shorts intégré** (menu 🍔 → Studio Shorts 🎬 : n'importe quel quiz devient une vidéo verticale MP4 avec musique, générée sur ton téléphone). Comptes de Chachou et Nicole : Premium à vie.
 
 ---
 
@@ -23,7 +23,7 @@ L'application complète sur **quizzalo.chachou8106.workers.dev** : quiz IA véri
   > 🎯 1 quiz par jour, 15 secondes pour répondre !
   > Blind tests 🎧, culture G 🌍, devinettes emoji 😀…
   > Combien de bonnes réponses ? Dis-le en commentaire 💬
-  > 🎮 Joue en vrai avec tes amis (gratuit, sans appli) 👉 quizzalo.chachou8106.workers.dev
+  > 🎮 Joue en vrai avec tes amis (gratuit, sans appli) 👉 quizify.chachou8106.workers.dev
 
 **Production des Shorts (déjà dans l'app) :** Studio Shorts 🎬 → choisis un quiz → 3 questions × 5 s → Générer → Télécharger → appli YouTube → ➕ → importer. **2 minutes par vidéo.**
 
