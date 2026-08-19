@@ -1,6 +1,6 @@
 // Nombre de questions : choix libre (1–20) ou aléatoire 🎲
 export default function CountPicker({ value, onChange, max = 20 }) {
-  const presets = [5, 10, 15, 20].filter((n) => n <= max);
+  const presets = [5, 10, 20, 30, 40, 50].filter((n) => n <= max);
   const random = () => onChange(5 + Math.floor(Math.random() * Math.min(11, max - 4)));
   return (
     <div className="flex flex-wrap items-center gap-2">

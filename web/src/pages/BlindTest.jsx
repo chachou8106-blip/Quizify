@@ -67,11 +67,11 @@ export default function BlindTest() {
   const themeQuery = () => [...selected, ...custom.split(',').map((s) => s.trim()).filter(Boolean)].join(', ');
 
   const generate = async () => {
-    const q = themeQuery();
-    if (!q) { setError('Choisis au moins un thème ou tape un artiste 🎶'); return; }
+    const artists = custom.split(',').map((s) => s.trim()).filter(Boolean).join(',');
+    if (!selected.length && !artists) { setError('Choisis au moins un thème ou tape un artiste 🎶'); return; }
     setLoading(true); setError(''); setSaved(null);
     try {
-      const d = await api(`/api/music/blindtest?q=${encodeURIComponent(q)}&count=${count}`);
+      const d = await api(`/api/music/blindtest?themes=${encodeURIComponent(selected.join(','))}&artists=${encodeURIComponent(artists)}&count=${count}`);
       setQuestions(d.questions);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
@@ -134,7 +134,7 @@ export default function BlindTest() {
         <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>La playlist</h2>
         <div>
           <label className="mb-1.5 block text-sm font-extrabold text-white/60">Nombre de morceaux</label>
-          <CountPicker value={count} onChange={setCount} />
+          <CountPicker value={count} onChange={setCount} max={50} />
         </div>
         {error && <p className="font-bold text-cherry">{error}</p>}
         <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">

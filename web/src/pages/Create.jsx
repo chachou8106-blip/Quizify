@@ -138,7 +138,7 @@ export default function Create() {
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-extrabold text-white/60">Questions</label>
-            <CountPicker value={count} onChange={setCount} />
+            <CountPicker value={count} onChange={setCount} max={40} />
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-extrabold text-white/60">Difficulté</label>

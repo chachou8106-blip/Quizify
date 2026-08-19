@@ -147,13 +147,31 @@ app.post('/api/ai/generate', auth, async (c) => {
 
   let questions;
   try {
-    questions = await generateQuestions(c.env, {
+    const total = Math.min(Math.max(parseInt(count) || 5, 1), 40);
+    const baseOpts = {
       topic: String(topic || '').slice(0, 2000),
-      category, type,
-      count: Math.min(Math.max(parseInt(count) || 5, 1), 20),
-      difficulty, language,
+      category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
-    });
+    };
+    if (total <= 12) {
+      questions = await generateQuestions(c.env, { ...baseOpts, count: total });
+    } else {
+      // Gros quiz : génération par lots parallèles de 10 (fiable), puis fusion + dédoublonnage.
+      const chunks = [];
+      for (let left = total; left > 0; left -= 10) chunks.push(Math.min(10, left));
+      const batches = await Promise.all(chunks.map((n, i) =>
+        generateQuestions(c.env, { ...baseOpts, count: n, topic: `${baseOpts.topic}\n(Lot ${i + 1} — propose des questions sur des aspects différents des autres lots.)` })
+          .catch(() => [])
+      ));
+      const seen = new Set();
+      questions = batches.flat().filter((q) => {
+        const k = q.question.toLowerCase().replace(/\W+/g, ' ').trim();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).slice(0, total);
+      if (questions.length < Math.min(8, total)) throw new Error('pas assez de questions valides');
+    }
   } catch (e) {
     return c.json({ error: 'ai_failed', message: `La génération a échoué (${e.message}). Réessaie dans quelques secondes !` }, 502);
   }
@@ -175,12 +193,14 @@ function cleanTitle(s) {
   return String(s).replace(/\s*\(.*?(remaster|version|edit|mix|live|radio).*?\)/gi, '').trim();
 }
 
-async function fetchTracksDeezer(term, limit = 25) {
-  const url = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=${limit}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
-  if (!res.ok) return { status: res.status, tracks: [] };
-  const data = await res.json().catch(() => ({}));
-  const tracks = (data.data || [])
+async function deezerJson(path) {
+  const res = await fetch(`https://api.deezer.com${path}`, { headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' } });
+  if (!res.ok) return null;
+  return res.json().catch(() => null);
+}
+
+function mapDeezerTracks(list) {
+  return (list || [])
     .filter((t) => t.preview && t.title && t.artist?.name)
     .map((t) => ({
       title: cleanTitle(t.title),
@@ -190,7 +210,41 @@ async function fetchTracksDeezer(term, limit = 25) {
       preview: `/api/music/preview/dz/${t.id}`,
       art: t.album?.cover_medium || '',
     }));
-  return { status: res.status, tracks };
+}
+
+async function fetchTracksDeezer(term, limit = 25) {
+  const data = await deezerJson(`/search?q=${encodeURIComponent(term)}&limit=${limit}`);
+  return { status: data ? 200 : 500, tracks: mapDeezerTracks(data?.data) };
+}
+
+const normTxt = (s) => String(s).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+// « Hits du moment » = Top Charts officiel Deezer (jamais de recherche textuelle).
+async function fetchChartTracks(limit = 60) {
+  const data = await deezerJson(`/chart/0/tracks?limit=${limit}`);
+  return mapDeezerTracks(data?.data);
+}
+
+// Thème d'ambiance = morceaux des playlists les PLUS POPULAIRES correspondant au thème.
+async function fetchThemeTracks(term, limit = 60) {
+  if (/\bhits? du moment\b|\btop 50\b|\btendance/.test(normTxt(term))) return fetchChartTracks(limit);
+  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent(term)}&limit=10`);
+  const playlists = (search?.data || [])
+    .filter((p) => (p.nb_tracks || 0) >= 15)
+    .sort((a, b) => (b.fans || b.nb_tracks || 0) - (a.fans || a.nb_tracks || 0))
+    .slice(0, 2);
+  const out = [];
+  for (const p of playlists) {
+    const tr = await deezerJson(`/playlist/${p.id}/tracks?limit=${Math.min(limit, 100)}`);
+    out.push(...mapDeezerTracks(tr?.data));
+    if (out.length >= limit) break;
+  }
+  // Filet de sécurité si aucune playlist pertinente
+  if (out.length < 8) {
+    const s = await fetchTracksDeezer(term, 25);
+    out.push(...s.tracks);
+  }
+  return out;
 }
 
 // Resolve a fresh Deezer preview URL at play time (stored URLs never expire).
@@ -254,13 +308,20 @@ app.get('/api/music/debug', async (c) => {
 });
 
 app.get('/api/music/blindtest', async (c) => {
-  const q = (c.req.query('q') || '').trim();
-  const count = Math.min(Math.max(parseInt(c.req.query('count')) || 8, 3), 20);
-  if (!q) return c.json({ error: 'Indique au moins un artiste, genre ou thème' }, 400);
+  const q = (c.req.query('q') || '').trim();               // rétro-compatibilité
+  const themesParam = (c.req.query('themes') || '').trim(); // ambiances → playlists populaires / charts
+  const artistsParam = (c.req.query('artists') || '').trim(); // artistes précis → recherche directe
+  const count = Math.min(Math.max(parseInt(c.req.query('count')) || 8, 3), 50);
+  if (!q && !themesParam && !artistsParam) return c.json({ error: 'Indique au moins un artiste, genre ou thème' }, 400);
 
-  const themes = q.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
-  const perTheme = Math.max(10, Math.ceil((count * 5) / themes.length));
-  const pools = await Promise.all(themes.map((t) => fetchTracks(t, Math.min(perTheme, 25))));
+  const split = (s) => s.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).slice(0, 10);
+  const themes = split(themesParam || (artistsParam ? '' : q));
+  const artists = split(artistsParam);
+  const perTheme = Math.min(100, Math.max(20, Math.ceil((count * 4) / Math.max(1, themes.length + artists.length))));
+  const pools = await Promise.all([
+    ...themes.map((t) => fetchThemeTracks(t, perTheme)),
+    ...artists.map((a) => fetchTracksDeezer(a, Math.min(perTheme, 25)).then((r) => r.tracks)),
+  ]);
 
   // Dedupe by title+artist
   const seen = new Set();
