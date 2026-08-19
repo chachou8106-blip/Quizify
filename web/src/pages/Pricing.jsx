@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, GUMROAD_LINKS } from '../api';
+import { useEffect } from 'react';
 import { useAuth } from '../store';
 
 export default function Pricing() {
@@ -9,6 +10,11 @@ export default function Pricing() {
   const [key, setKey] = useState('');
   const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [links, setLinks] = useState(GUMROAD_LINKS);
+
+  useEffect(() => {
+    api('/api/config').then((c) => c.gumroad && setLinks(c.gumroad)).catch(() => {});
+  }, []);
 
   const activate = async (e) => {
     e.preventDefault();
@@ -32,12 +38,12 @@ export default function Pricing() {
     {
       name: 'Premium', price: '4,99 €/mois', emoji: '👑', border: 'border-grape', badge: 'Le plus populaire',
       features: ['Quiz IA illimités', 'Parties live jusqu\'à 100 joueurs', 'Toutes les catégories & difficultés', 'Support prioritaire'],
-      cta: { label: 'S\'abonner via Gumroad', href: GUMROAD_LINKS.premium },
+      cta: { label: 'S\'abonner via Gumroad', href: links.premium },
     },
     {
       name: 'Pass Événement', price: '14,99 € / 48h', emoji: '🎉', border: 'border-bubble',
       features: ['Tout Premium pendant 48h', 'Parfait anniversaires & soirées', 'Jusqu\'à 100 joueurs', 'Sans abonnement, sans engagement'],
-      cta: { label: 'Acheter un pass', href: GUMROAD_LINKS.event },
+      cta: { label: 'Acheter un pass', href: links.event },
     },
   ];
 

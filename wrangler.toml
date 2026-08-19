@@ -7,7 +7,7 @@ compatibility_date = "2026-08-01"
 directory = "web/dist"
 not_found_handling = "single-page-application"
 binding = "ASSETS"
-run_worker_first = ["/api/*"]
+run_worker_first = ["/api/*", "/ads.txt"]
 
 # AI generation — no external API key needed
 [ai]
@@ -37,9 +37,13 @@ new_sqlite_classes = ["GameRoom"]
 crons = ["0 4 * * *"]
 
 [vars]
-GUMROAD_PREMIUM_PERMALINK = "quizify-premium"
-GUMROAD_EVENT_PERMALINK = "quizify-event"
 APP_NAME = "Quizify"
+# --- Monétisation : à remplir quand les comptes seront créés (il suffit d'éditer puis push) ---
+GUMROAD_PREMIUM_PERMALINK = "quizify-premium"   # permalink du produit abonnement
+GUMROAD_EVENT_PERMALINK = "quizify-event"       # permalink du pass événement
+GUMROAD_PREMIUM_URL = ""                        # URL d'achat complète (ex: https://xxx.gumroad.com/l/quizify-premium)
+GUMROAD_EVENT_URL = ""                          # URL d'achat complète du pass
+ADSENSE_CLIENT = ""                             # ex: ca-pub-1234567890123456 (nécessite un domaine propre)
 
 # Secrets (set with: wrangler secret put AUTH_SECRET)
 # AUTH_SECRET = JWT signing secret

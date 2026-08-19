@@ -41,7 +41,7 @@ export default function Nav() {
 
       {open && (
         <div className="flex flex-col gap-1 border-t border-white/10 bg-[#161130] px-4 py-3 sm:hidden">
-          {[['Créer un quiz', '/create'], ['Blind test musical 🎧', '/blindtest'], ['Découvrir 🧭', '/explore'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : [])].map(([label, to]) => (
+          {[['Créer un quiz', '/create'], ['Blind test musical 🎧', '/blindtest'], ['Découvrir 🧭', '/explore'], ['Studio Shorts 🎬', '/studio'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : [])].map(([label, to]) => (
             <Link key={to} to={to} onClick={() => setOpen(false)} className="rounded-xl px-3 py-2.5 font-bold text-white/85 hover:bg-grape/10">{label}</Link>
           ))}
           {user ? (

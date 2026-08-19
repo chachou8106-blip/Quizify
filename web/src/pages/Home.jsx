@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import AdSlot from '../components/AdSlot';
 
 export default function Home() {
   const [pin, setPin] = useState('');
@@ -80,6 +81,8 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <AdSlot slot="home" />
 
       {/* Birthday CTA */}
       <section className="card bg-gradient-to-r from-bubble to-grape text-center text-white">

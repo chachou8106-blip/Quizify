@@ -446,6 +446,21 @@ app.post('/api/rewards/claim', auth, async (c) => {
   return c.json({ ok: true, credits: r.credits, bonus: u?.bonus_ai || r.credits });
 });
 
+// Config publique : liens d'achat + AdSense. Remplie via les [vars] de wrangler.toml.
+app.get('/api/config', (c) => c.json({
+  gumroad: {
+    premium: c.env.GUMROAD_PREMIUM_URL || `https://gumroad.com/l/${c.env.GUMROAD_PREMIUM_PERMALINK || 'quizify-premium'}`,
+    event: c.env.GUMROAD_EVENT_URL || `https://gumroad.com/l/${c.env.GUMROAD_EVENT_PERMALINK || 'quizify-event'}`,
+  },
+  adsenseClient: c.env.ADSENSE_CLIENT || null,
+}));
+
+// ads.txt requis par AdSense (généré dès que ADSENSE_CLIENT est rempli)
+app.get('/ads.txt', (c) => {
+  if (!c.env.ADSENSE_CLIENT) return c.text('', 200);
+  return c.text(`google.com, ${c.env.ADSENSE_CLIENT.replace('ca-', '')}, DIRECT, f08c47fec0942fa0\n`);
+});
+
 app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizify' }));
 
 // Protected self-test: verifies AI, D1 and KV in production. GET /api/selftest?key=<AUTH_SECRET>

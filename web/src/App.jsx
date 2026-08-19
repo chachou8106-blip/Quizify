@@ -14,6 +14,7 @@ import Host from './pages/Host';
 import Join from './pages/Join';
 import Reward from './pages/Reward';
 import Explore from './pages/Explore';
+import Studio from './pages/Studio';
 
 export default function App() {
   const location = useLocation();
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<Create />} />
           <Route path="/explore" element={<Explore />} />
+          <Route path="/studio" element={<Studio />} />
           <Route path="/birthday" element={<Birthday />} />
           <Route path="/blindtest" element={<BlindTest />} />
           <Route path="/play/:id" element={<Player mode="own" />} />

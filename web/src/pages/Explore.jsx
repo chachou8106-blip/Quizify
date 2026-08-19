@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import AdSlot from '../components/AdSlot';
 
 // Tout Quizify rangé par catégorie — le hub d'exploration (et la vitrine des futurs packs).
 export default function Explore() {
@@ -53,6 +54,8 @@ export default function Explore() {
           </Link>
         ))}
       </div>
+
+      <AdSlot slot="explore" />
 
       <div className="card bg-gradient-to-r from-grape/40 to-bubble/40 text-center">
         <h2 className="font-display text-2xl font-extrabold">💡 Une envie précise ?</h2>

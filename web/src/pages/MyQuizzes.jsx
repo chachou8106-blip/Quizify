@@ -60,6 +60,7 @@ export default function MyQuizzes() {
               <Link to={`/play/${q.id}`} className="btn-ghost !px-3 !py-1.5 !text-sm">▶️ Solo</Link>
               <button onClick={() => hostLive(q.id)} className="btn-pink !px-3 !py-1.5 !text-sm">🎉 Live</button>
               <button onClick={() => copy(q.share_code)} className="btn-sunny !px-3 !py-1.5 !text-sm">🔗 Lien</button>
+              <Link to={`/studio?id=${q.id}`} className="btn-ghost !px-3 !py-1.5 !text-sm">🎬 Vidéo</Link>
             </div>
           </div>
         ))}
