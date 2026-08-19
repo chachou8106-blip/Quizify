@@ -145,10 +145,22 @@ async function fetchTracksDeezer(term, limit = 25) {
     .map((t) => ({
       title: cleanTitle(t.title),
       artist: t.artist.name,
-      preview: t.preview,
+      // Deezer preview URLs expire after a few minutes — store a proxy path
+      // that resolves a fresh URL at play time instead.
+      preview: `/api/music/preview/dz/${t.id}`,
       art: t.album?.cover_medium || '',
     }));
   return { status: res.status, tracks };
+}
+
+// Resolve a fresh Deezer preview URL at play time (stored URLs never expire).
+async function deezerPreviewUrl(id) {
+  const res = await fetch(`https://api.deezer.com/track/${encodeURIComponent(id)}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Quizify)' },
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  return data.preview || null;
 }
 
 async function fetchTracksItunes(term, limit = 25) {
@@ -181,6 +193,14 @@ function shuffle(a) {
   }
   return a;
 }
+
+app.get('/api/music/preview/dz/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!/^\d+$/.test(id)) return c.json({ error: 'invalid id' }, 400);
+  const url = await deezerPreviewUrl(id);
+  if (!url) return c.json({ error: 'Extrait indisponible' }, 404);
+  return c.redirect(url, 302);
+});
 
 // Diagnostic sources musicales (protégé)
 app.get('/api/music/debug', async (c) => {
