@@ -16,16 +16,38 @@ body {
 h1, h2, h3, .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 font-display font-bold text-lg transition-all active:translate-y-1 active:shadow-none select-none cursor-pointer;
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 font-display font-bold text-lg transition-all hover:-translate-y-0.5 active:translate-y-1 active:shadow-none select-none cursor-pointer;
 }
 .btn-primary { @apply btn bg-gradient-to-r from-grape to-bubble text-white shadow-pop hover:brightness-110; }
 .btn-pink { @apply btn bg-bubble text-white shadow-pop hover:brightness-110; }
 .btn-sunny { @apply btn bg-sunny text-slate-900 shadow-pop hover:brightness-105; }
 .btn-ghost { @apply btn bg-white/70 text-grape border-2 border-grape/30 hover:border-grape; }
-.card { @apply bg-white rounded-3xl shadow-card p-6 transition-shadow hover:shadow-xl; }
+.card { @apply bg-white rounded-3xl shadow-card p-6 border border-white transition-all hover:shadow-xl; }
 .input {
-  @apply w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg outline-none transition-colors focus:border-grape;
+  @apply w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg outline-none transition-all focus:border-grape;
 }
+.input:focus { box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.14); }
+
+/* Selects premium : chevron custom, sans l'apparence système */
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%237C3AED'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 1.25rem;
+  padding-right: 2.75rem;
+}
+
+/* Transition douce entre les pages */
+@keyframes pageUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter { animation: pageUp 0.35s ease both; }
+
+/* Décorations flottantes du hero */
+.deco { @apply pointer-events-none absolute select-none opacity-60; }
 .chip {
   @apply inline-flex items-center gap-1.5 rounded-full px-4 py-2 font-bold text-sm cursor-pointer border-2 transition-all select-none;
 }

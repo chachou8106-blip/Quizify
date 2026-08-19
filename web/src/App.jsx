@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Nav from './components/Nav';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -15,10 +15,11 @@ import Join from './pages/Join';
 import Reward from './pages/Reward';
 
 export default function App() {
+  const location = useLocation();
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="mx-auto max-w-5xl px-4 pb-24 pt-24">
+      <main key={location.pathname} className="page-enter mx-auto max-w-5xl px-4 pb-24 pt-24">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<Create />} />

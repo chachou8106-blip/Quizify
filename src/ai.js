@@ -70,6 +70,7 @@ Difficulté : ${diff}
 ${typeRules}
 Ajoute pour chaque question une courte "explanation" (1 phrase, instructive ou drôle).
 Les questions doivent être variées, factuellement correctes, sans répétition, formulées de façon vivante.
+Pour toute notation mathématique, utilise UNIQUEMENT les symboles Unicode : ², ³, ×, ÷, √, π, ½ — jamais ^, **, ni notation LaTeX.
 Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, au format :
 [{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]`;
 }
@@ -121,6 +122,23 @@ function salvageObjects(text) {
   return out;
 }
 
+// Écriture mathématique propre : convertit ^2, **3, LaTeX… en ², ³, √, ×, ÷, π.
+const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const supNum = (n) => String(n).split('').map((d) => SUP[d] || d).join('');
+function cleanMath(s) {
+  if (typeof s !== 'string') return s;
+  let t = s;
+  t = t.replace(/\\\(|\\\)|\\\[|\\\]/g, '');                     // délimiteurs LaTeX
+  t = t.replace(/\$+([^$]+)\$+/g, '$1');                          // $...$
+  t = t.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1/$2');       // fractions
+  t = t.replace(/\\times/g, '×').replace(/\\cdot/g, '×').replace(/\\div/g, '÷').replace(/\\pi/g, 'π');
+  t = t.replace(/\\sqrt\s*\{([^}]+)\}/g, '√($1)').replace(/\\sqrt/g, '√').replace(/\bsqrt\s*\(/gi, '√(');
+  t = t.replace(/\*\*\s*(\d+)/g, (_, n) => supNum(n));            // x**2 → x²
+  t = t.replace(/\^\s*\{?(\d+)\}?/g, (_, n) => supNum(n));        // x^2, x^{3} → x², x³
+  t = t.replace(/(\d)\s*\*\s*(\d)/g, '$1 × $2');                  // 4*5 → 4 × 5
+  return t;
+}
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -139,10 +157,10 @@ function normalize(raw, type) {
     }
     if (!options || options.length < 2 || correct === null || correct < 0 || correct >= options.length) continue;
     out.push({
-      question: q.question.trim(),
-      options,
+      question: cleanMath(q.question.trim()),
+      options: options.map(cleanMath),
       correct,
-      explanation: typeof q.explanation === 'string' ? q.explanation.trim() : '',
+      explanation: typeof q.explanation === 'string' ? cleanMath(q.explanation.trim()) : '',
     });
   }
   if (out.length === 0) throw new Error('no-valid-questions');

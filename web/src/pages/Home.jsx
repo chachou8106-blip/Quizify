@@ -13,7 +13,11 @@ export default function Home() {
   return (
     <div className="space-y-14">
       {/* Hero */}
-      <section className="pt-6 text-center">
+      <section className="relative pt-6 text-center">
+        <span className="deco left-2 top-2 animate-floaty text-4xl" style={{ animationDelay: '0.3s' }}>🎈</span>
+        <span className="deco right-4 top-10 animate-floaty text-3xl" style={{ animationDelay: '0.9s' }}>🎊</span>
+        <span className="deco left-8 bottom-2 animate-floaty text-3xl" style={{ animationDelay: '1.4s' }}>🎵</span>
+        <span className="deco right-10 bottom-8 animate-floaty text-4xl" style={{ animationDelay: '0.6s' }}>❓</span>
         <img src="/logo.svg" alt="Quizify" className="mx-auto mb-4 h-20 w-20 animate-floaty" />
         <h1 className="mx-auto max-w-2xl font-display text-4xl font-extrabold leading-tight text-slate-900 sm:text-5xl">
           La fête commence<br className="hidden sm:block" /> par une <span className="bg-gradient-to-r from-grape to-bubble bg-clip-text text-transparent">question</span> ✨
