@@ -4,15 +4,30 @@ import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
 
+const TYPES = [
+  { value: 'mixed', label: '🎲 Mix surprise', hint: 'Tous les styles mélangés' },
+  { value: 'multipleChoice', label: '❓ QCM', hint: '4 options classiques' },
+  { value: 'trueFalse', label: '⚖️ Vrai / Faux', hint: 'Simple et rapide' },
+  { value: 'emoji', label: '😀 Devinette Emoji', hint: 'Devine avec des emojis' },
+  { value: 'riddle', label: '🕵️ Qui suis-je ?', hint: '3 indices progressifs' },
+  { value: 'chrono', label: '🕰️ Lequel en premier ?', hint: 'Chronologie' },
+  { value: 'intru', label: '🔍 Trouve l\'intrus', hint: 'Un ne colle pas…' },
+  { value: 'quote', label: '💬 Qui a dit ça ?', hint: 'Citations célèbres' },
+  { value: 'year', label: '📅 En quelle année ?', hint: 'Dates marquantes' },
+  { value: 'anagram', label: '🔤 Anagrammes', hint: 'Lettres mélangées' },
+  { value: 'math', label: '🧮 Calcul rapide', hint: 'Mental et fun' },
+];
+
 export default function Create() {
   const { user, ready, refresh } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState({});
-  const [category, setCategory] = useState('culture');
+  const [category, setCategory] = useState('free');
   const [topic, setTopic] = useState('');
-  const [type, setType] = useState('multipleChoice');
+  const [type, setType] = useState('mixed');
   const [count, setCount] = useState(8);
   const [difficulty, setDifficulty] = useState('medium');
+  const [showAllCats, setShowAllCats] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState(null);
@@ -26,6 +41,9 @@ export default function Create() {
     if (ready && !user) navigate('/signup?next=/create');
   }, [ready, user, navigate]);
 
+  const catEntries = Object.entries(categories).filter(([id]) => id !== 'birthday' && id !== 'blindtest');
+  const visibleCats = showAllCats ? catEntries : catEntries.slice(0, 7);
+
   const generate = async () => {
     if (!topic.trim()) { setError('Décris le sujet de ton quiz ✍️'); return; }
     setLoading(true); setError(''); setSaved(null);
@@ -37,9 +55,7 @@ export default function Create() {
       setQuestions(d.questions);
       refresh();
     } catch (e) {
-      if (e.code === 'quota') {
-        setError('quota');
-      } else setError(e.message);
+      setError(e.code === 'quota' ? 'quota' : e.message);
     } finally { setLoading(false); }
   };
 
@@ -57,60 +73,74 @@ export default function Create() {
 
   if (!ready || !user) return null;
 
+  const selectedType = TYPES.find((t) => t.value === type);
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <h1 className="font-display text-3xl font-extrabold sm:text-4xl">🤖 Créer un quiz avec l'IA</h1>
+      <div className="text-center">
+        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">🤖 Crée ton quiz</h1>
+        <p className="mt-1 font-semibold text-slate-500">N'importe quel sujet, prêt en 30 secondes.</p>
+      </div>
 
-      <div className="card space-y-5">
-        <div>
-          <label className="mb-2 block font-display font-extrabold">Catégorie</label>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(categories).filter(([id]) => id !== 'birthday' && id !== 'blindtest').map(([id, cat]) => (
-              <button
-                key={id}
-                onClick={() => setCategory(id)}
-                className="chip"
-                style={category === id
-                  ? { backgroundColor: cat.color, borderColor: cat.color, color: 'white' }
-                  : { backgroundColor: 'white', borderColor: '#E2E8F0', color: '#475569' }}
-              >
-                {cat.emoji} {cat.name}
-              </button>
-            ))}
-          </div>
+      {/* Étape 1 — Sujet */}
+      <div className="card space-y-3">
+        <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-grape px-3 py-0.5 text-white">1</span>Ton sujet</h2>
+        <textarea
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder={'"Les années 80", "Harry Potter", "Le mariage de Julie et Tom", "Notre voyage en Italie"… ou colle un texte entier : l\'IA fera les questions dessus.'}
+          className="input h-24 resize-none"
+        />
+      </div>
+
+      {/* Étape 2 — Catégorie (optionnelle) */}
+      <div className="card space-y-3">
+        <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>Catégorie <span className="text-base font-bold text-slate-400">(optionnelle)</span></h2>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <button
+            onClick={() => setCategory('free')}
+            className={`rounded-2xl border-2 p-3 text-left transition-all ${category === 'free' ? 'border-grape bg-grape/10 shadow-card' : 'border-slate-200 bg-white hover:border-grape/50'}`}
+          >
+            <div className="text-2xl">✨</div>
+            <div className="font-display text-sm font-extrabold">Sujet libre</div>
+            <div className="text-xs font-semibold text-slate-400">Sans catégorie</div>
+          </button>
+          {visibleCats.map(([id, cat]) => (
+            <button
+              key={id}
+              onClick={() => setCategory(id)}
+              className={`rounded-2xl border-2 p-3 text-left transition-all ${category === id ? 'shadow-card' : 'border-slate-200 bg-white'}`}
+              style={category === id ? { borderColor: cat.color, backgroundColor: cat.color + '18' } : {}}
+            >
+              <div className="text-2xl">{cat.emoji}</div>
+              <div className="font-display text-sm font-extrabold leading-tight">{cat.name}</div>
+            </button>
+          ))}
         </div>
+        <button onClick={() => setShowAllCats(!showAllCats)} className="w-full rounded-xl py-2 font-bold text-grape hover:bg-grape/5">
+          {showAllCats ? '▲ Réduire' : `▼ Voir les ${catEntries.length - 7} autres catégories`}
+        </button>
+      </div>
 
-        <div>
-          <label className="mb-2 block font-display font-extrabold">Sujet du quiz</label>
-          <textarea
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder={'Ex : "Les années 80", "Harry Potter", "La coupe du monde de foot"… ou colle un texte entier, l\'IA fera les questions dessus.'}
-            className="input h-28 resize-none"
-          />
-        </div>
-
+      {/* Étape 3 — Réglages */}
+      <div className="card space-y-4">
+        <h2 className="font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Le style de jeu</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-2 block font-display font-extrabold">Type</label>
+          <div className="sm:col-span-1">
+            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Type de quiz</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="input">
-              <option value="multipleChoice">QCM (4 options)</option>
-              <option value="mixed">🎲 Mix surprise (tous les styles)</option>
-              <option value="trueFalse">Vrai / Faux</option>
-              <option value="emoji">😀 Devinette Emoji</option>
-              <option value="riddle">🕵️ Qui suis-je ?</option>
-              <option value="chrono">🕰️ Lequel en premier ?</option>
-              <option value="intru">🔍 Trouve l'intrus</option>
+              {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
+            {selectedType && <p className="mt-1 text-xs font-bold text-slate-400">{selectedType.hint}</p>}
           </div>
           <div>
-            <label className="mb-2 block font-display font-extrabold">Questions</label>
+            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Questions</label>
             <select value={count} onChange={(e) => setCount(+e.target.value)} className="input">
               {[5, 8, 10, 12, 15, 20].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <div>
-            <label className="mb-2 block font-display font-extrabold">Difficulté</label>
+            <label className="mb-1.5 block text-sm font-extrabold text-slate-500">Difficulté</label>
             <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="input">
               <option value="easy">😊 Facile</option>
               <option value="medium">🤔 Moyen</option>

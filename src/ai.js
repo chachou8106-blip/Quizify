@@ -42,6 +42,9 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
   let subject;
   if (personalFacts) {
     subject = `Ce quiz est un quiz PERSONNALISÉ sur une personne, pour une fête. Voici des anecdotes et faits fournis sur cette personne — chaque question DOIT être basée uniquement sur ces faits (n'invente RIEN d'autre sur la personne, mais invente des mauvaises réponses plausibles et drôles) :\n${personalFacts}`;
+  } else if (category === 'free' || !CATEGORIES[category]) {
+    // Sujet libre : aucune contrainte de catégorie, l'IA suit uniquement le sujet donné.
+    subject = `Sujet du quiz (sujet libre, sans catégorie imposée) : ${topic}`;
   } else {
     subject = `Sujet du quiz : ${topic}\nCatégorie : ${cat}`;
   }
@@ -52,7 +55,11 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
     riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
     chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.`,
     intru: `C'est un quiz TROUVE L'INTRUS : chaque "question" commence par "Trouve l'intrus :" suivi du thème (ex: "Trouve l'intrus : ces artistes ont tous gagné un Grammy… sauf un !"). Les 4 "options" partagent toutes un point commun SAUF une (l'intrus = la bonne réponse). L'explication révèle le point commun.`,
-    mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs) et "Trouve l'intrus". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
+    mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs), "Trouve l'intrus", citation ("Qui a dit ça ?") et "En quelle année ?". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
+    quote: `C'est un quiz QUI A DIT ÇA ? : chaque "question" est une citation ou réplique célèbre RÉELLE entre guillemets « », liée au sujet. Les 4 "options" sont des personnes/personnages plausibles ; une seule a réellement dit ou écrit cette phrase. L'explication donne le contexte de la citation.`,
+    anagram: `C'est un quiz ANAGRAMMES : chaque "question" est de la forme "Remets les lettres dans l'ordre : X-Y-Z" où les lettres MAJUSCULES séparées par des tirets sont le VRAI mélange des lettres d'un mot ou nom lié au sujet. Les 4 "options" sont des mots plausibles de longueur similaire ; une seule correspond exactement à ces lettres. Vérifie soigneusement que les lettres correspondent.`,
+    year: `C'est un quiz EN QUELLE ANNÉE ? : chaque question demande l'année précise d'un événement marquant lié au sujet (sortie d'un film, victoire, invention…). Les 4 "options" sont des années proches et crédibles (ex: "1994","1996","1998","2001") ; une seule est exacte.`,
+    math: `C'est un quiz CALCUL RAPIDE spécial soirée : chaque "question" est un petit calcul mental amusant et accessible (additions, multiplications simples, pourcentages faciles, petites énigmes numériques), si possible habillé avec le thème du sujet. 4 "options" numériques proches ; une seule correcte.`,
     multipleChoice: `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`,
   };
   const typeRules = TYPE_RULES[type] || TYPE_RULES.multipleChoice;
