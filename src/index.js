@@ -1,0 +1,278 @@
+// Quizify — Cloudflare Worker API + static SPA + Durable Object live games.
+
+import { Hono } from 'hono';
+import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
+import { generateQuestions, CATEGORIES } from './ai';
+import { activateLicense, reverifyAll } from './gumroad';
+export { GameRoom } from './GameRoom';
+
+const app = new Hono();
+const secret = (c) => c.env.AUTH_SECRET || 'dev-secret-change-me';
+const auth = requireAuth(secret);
+
+const FREE_AI_PER_MONTH = 3;
+const FREE_MAX_PLAYERS = 10;
+const PAID_MAX_PLAYERS = 100;
+
+// ---------- helpers ----------
+
+async function getPlan(c, userId) {
+  const u = await c.env.DB.prepare('SELECT plan, plan_expires FROM users WHERE id = ?').bind(userId).first();
+  if (!u) return 'free';
+  if (u.plan === 'premium') return 'premium';
+  if (u.plan === 'event' && u.plan_expires && new Date(u.plan_expires) > new Date()) return 'event';
+  return 'free';
+}
+
+function monthKey() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function shareCode() {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  const a = new Uint8Array(8);
+  crypto.getRandomValues(a);
+  for (const b of a) s += chars[b % chars.length];
+  return s;
+}
+
+function gamePin() {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return String(100000 + (a[0] % 900000));
+}
+
+// ---------- auth ----------
+
+app.post('/api/auth/signup', async (c) => {
+  const { email, password, name } = await c.req.json().catch(() => ({}));
+  if (!email || !password || !name) return c.json({ error: 'Tous les champs sont requis' }, 400);
+  if (password.length < 8) return c.json({ error: 'Mot de passe : 8 caractères minimum' }, 400);
+  const em = String(email).trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return c.json({ error: 'Email invalide' }, 400);
+  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(em).first();
+  if (existing) return c.json({ error: 'Un compte existe déjà avec cet email' }, 409);
+  const id = randomHex(12);
+  const salt = randomHex(16);
+  const hash = await hashPassword(password, salt);
+  await c.env.DB.prepare('INSERT INTO users (id, email, name, pass_hash, salt) VALUES (?,?,?,?,?)')
+    .bind(id, em, String(name).trim().slice(0, 40), hash, salt).run();
+  const token = await signJWT({ id, email: em, name: String(name).trim().slice(0, 40) }, secret(c));
+  return c.json({ token, user: { id, email: em, name, plan: 'free' } }, 201);
+});
+
+app.post('/api/auth/login', async (c) => {
+  const { email, password } = await c.req.json().catch(() => ({}));
+  if (!email || !password) return c.json({ error: 'Email et mot de passe requis' }, 400);
+  const em = String(email).trim().toLowerCase();
+  const u = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(em).first();
+  if (!u) return c.json({ error: 'Email ou mot de passe incorrect' }, 401);
+  const hash = await hashPassword(password, u.salt);
+  if (hash !== u.pass_hash) return c.json({ error: 'Email ou mot de passe incorrect' }, 401);
+  const token = await signJWT({ id: u.id, email: u.email, name: u.name }, secret(c));
+  const plan = await getPlan(c, u.id);
+  return c.json({ token, user: { id: u.id, email: u.email, name: u.name, plan } });
+});
+
+app.get('/api/auth/me', auth, async (c) => {
+  const user = c.get('user');
+  const u = await c.env.DB.prepare('SELECT id, email, name, plan, plan_expires FROM users WHERE id = ?').bind(user.id).first();
+  if (!u) return c.json({ error: 'Compte introuvable' }, 404);
+  const plan = await getPlan(c, u.id);
+  const usage = await c.env.DB.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND month = ?')
+    .bind(u.id, monthKey()).first();
+  return c.json({
+    user: { id: u.id, email: u.email, name: u.name, plan, plan_expires: u.plan_expires },
+    aiUsed: usage?.count || 0,
+    aiQuota: plan === 'free' ? FREE_AI_PER_MONTH : null,
+  });
+});
+
+// ---------- AI generation ----------
+
+app.get('/api/categories', (c) => c.json({ categories: CATEGORIES }));
+
+app.post('/api/ai/generate', auth, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json().catch(() => ({}));
+  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts } = body;
+  if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
+
+  const plan = await getPlan(c, user.id);
+  if (plan === 'free') {
+    const usage = await c.env.DB.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND month = ?')
+      .bind(user.id, monthKey()).first();
+    if ((usage?.count || 0) >= FREE_AI_PER_MONTH) {
+      return c.json({ error: 'quota', message: `Tu as utilisé tes ${FREE_AI_PER_MONTH} générations gratuites du mois. Passe en Premium pour générer sans limite !` }, 402);
+    }
+  }
+
+  let questions;
+  try {
+    questions = await generateQuestions(c.env, {
+      topic: String(topic || '').slice(0, 2000),
+      category, type,
+      count: Math.min(Math.max(parseInt(count) || 5, 1), 20),
+      difficulty, language,
+      personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
+    });
+  } catch (e) {
+    return c.json({ error: 'La génération a échoué, réessaie dans un instant.' }, 502);
+  }
+
+  await c.env.DB.prepare(
+    'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
+  ).bind(user.id, monthKey()).run();
+
+  return c.json({ questions });
+});
+
+// ---------- quizzes ----------
+
+app.post('/api/quizzes', auth, async (c) => {
+  const user = c.get('user');
+  const { title, category = 'culture', difficulty = 'medium', language = 'fr', questions } = await c.req.json().catch(() => ({}));
+  if (!title || !Array.isArray(questions) || questions.length === 0) {
+    return c.json({ error: 'Titre et questions requis' }, 400);
+  }
+  const id = randomHex(10);
+  const code = shareCode();
+  const emoji = CATEGORIES[category]?.emoji || '🎯';
+  await c.env.DB.prepare(
+    'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).bind(id, user.id, String(title).slice(0, 100), category, emoji, difficulty, language, JSON.stringify(questions), code).run();
+  return c.json({ quiz: { id, title, category, emoji, share_code: code, questions } }, 201);
+});
+
+app.get('/api/quizzes', auth, async (c) => {
+  const user = c.get('user');
+  const { results } = await c.env.DB.prepare(
+    'SELECT id, title, category, emoji, difficulty, share_code, plays, created_at, questions FROM quizzes WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
+  ).bind(user.id).all();
+  return c.json({
+    quizzes: (results || []).map((q) => ({ ...q, questionCount: JSON.parse(q.questions).length, questions: undefined })),
+  });
+});
+
+app.get('/api/quizzes/:id', auth, async (c) => {
+  const user = c.get('user');
+  const q = await c.env.DB.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?')
+    .bind(c.req.param('id'), user.id).first();
+  if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
+  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions) } });
+});
+
+app.delete('/api/quizzes/:id', auth, async (c) => {
+  const user = c.get('user');
+  await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ? AND user_id = ?').bind(c.req.param('id'), user.id).run();
+  return c.json({ ok: true });
+});
+
+// Public shared quiz (play by link) — answers included client-side for solo play.
+app.get('/api/shared/:code', async (c) => {
+  const q = await c.env.DB.prepare('SELECT id, title, category, emoji, difficulty, questions FROM quizzes WHERE share_code = ?')
+    .bind(c.req.param('code')).first();
+  if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
+  c.executionCtx.waitUntil(
+    c.env.DB.prepare('UPDATE quizzes SET plays = plays + 1 WHERE id = ?').bind(q.id).run()
+  );
+  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions) } });
+});
+
+// ---------- live game rooms ----------
+
+app.post('/api/rooms', auth, async (c) => {
+  const user = c.get('user');
+  const { quizId, questions, title } = await c.req.json().catch(() => ({}));
+  let quiz;
+  if (quizId) {
+    const q = await c.env.DB.prepare('SELECT title, questions FROM quizzes WHERE id = ? AND user_id = ?')
+      .bind(quizId, user.id).first();
+    if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
+    quiz = { title: q.title, questions: JSON.parse(q.questions) };
+  } else if (Array.isArray(questions) && questions.length > 0) {
+    quiz = { title: String(title || 'Quiz').slice(0, 100), questions };
+  } else {
+    return c.json({ error: 'quizId ou questions requis' }, 400);
+  }
+
+  const plan = await getPlan(c, user.id);
+  const maxPlayers = plan === 'free' ? FREE_MAX_PLAYERS : PAID_MAX_PLAYERS;
+  const hostKey = randomHex(16);
+
+  // Find a free PIN (avoid collision with an active room)
+  let pin;
+  for (let i = 0; i < 5; i++) {
+    pin = gamePin();
+    const stub = c.env.GAME.get(c.env.GAME.idFromName(`room:${pin}`));
+    const st = await stub.fetch('https://do/status').then((r) => r.json());
+    if (!st.exists || st.phase === 'podium') break;
+  }
+  const stub = c.env.GAME.get(c.env.GAME.idFromName(`room:${pin}`));
+  await stub.fetch('https://do/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quiz, hostKey, maxPlayers }),
+  });
+  return c.json({ pin, hostKey, maxPlayers, title: quiz.title, questionCount: quiz.questions.length });
+});
+
+app.get('/api/rooms/:pin', async (c) => {
+  const pin = c.req.param('pin');
+  if (!/^\d{6}$/.test(pin)) return c.json({ exists: false });
+  const stub = c.env.GAME.get(c.env.GAME.idFromName(`room:${pin}`));
+  const st = await stub.fetch('https://do/status').then((r) => r.json());
+  return c.json(st);
+});
+
+// WebSocket upgrade — forwarded to the room's Durable Object.
+app.get('/api/rooms/:pin/ws', async (c) => {
+  const pin = c.req.param('pin');
+  if (!/^\d{6}$/.test(pin)) return c.text('PIN invalide', 400);
+  const stub = c.env.GAME.get(c.env.GAME.idFromName(`room:${pin}`));
+  return stub.fetch(c.req.raw);
+});
+
+// ---------- billing ----------
+
+app.post('/api/billing/activate', auth, async (c) => {
+  const user = c.get('user');
+  const { licenseKey } = await c.req.json().catch(() => ({}));
+  if (!licenseKey) return c.json({ error: 'Clé de licence requise' }, 400);
+  const key = String(licenseKey).trim();
+  // A license can only be used by one account
+  const taken = await c.env.DB.prepare('SELECT id FROM users WHERE license_key = ? AND id != ?').bind(key, user.id).first();
+  if (taken) return c.json({ error: 'Cette clé est déjà utilisée par un autre compte' }, 409);
+  const result = await activateLicense(c.env, key);
+  if (!result) return c.json({ error: 'Clé invalide ou abonnement terminé' }, 400);
+  await c.env.DB.prepare('UPDATE users SET plan = ?, plan_expires = ?, license_key = ? WHERE id = ?')
+    .bind(result.plan, result.expires, key, user.id).run();
+  return c.json({ ok: true, plan: result.plan, expires: result.expires });
+});
+
+// Gumroad ping webhook (form-encoded). Handles refunds/cancellations by email.
+app.post('/api/billing/webhook', async (c) => {
+  const form = await c.req.parseBody().catch(() => ({}));
+  const email = String(form.email || '').toLowerCase();
+  const refunded = form.refunded === 'true';
+  if (email && refunded) {
+    await c.env.DB.prepare("UPDATE users SET plan = 'free', plan_expires = NULL WHERE email = ?").bind(email).run();
+  }
+  return c.json({ ok: true });
+});
+
+app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizify' }));
+
+app.notFound((c) => {
+  if (new URL(c.req.url).pathname.startsWith('/api/')) return c.json({ error: 'Not Found' }, 404);
+  return c.env.ASSETS.fetch(c.req.raw);
+});
+
+export default {
+  fetch: app.fetch,
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(reverifyAll(env));
+  },
+};

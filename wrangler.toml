@@ -1,0 +1,45 @@
+name = "quizify"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+# Static frontend (built React app)
+[assets]
+directory = "web/dist"
+not_found_handling = "single-page-application"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+# AI generation — no external API key needed
+[ai]
+binding = "AI"
+
+# Database
+[[d1_databases]]
+binding = "DB"
+database_name = "quizify-db"
+database_id = "2f8b909a-265b-476e-b535-34de28dc7b29"
+
+# KV (rate limiting, misc cache)
+[[kv_namespaces]]
+binding = "KV"
+id = "938e4c11ec6e4d428193c549b470808e"
+
+# Live game rooms
+[durable_objects]
+bindings = [{ name = "GAME", class_name = "GameRoom" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+# Daily license re-verification (keeps premium status honest, fully autonomous)
+[triggers]
+crons = ["0 4 * * *"]
+
+[vars]
+GUMROAD_PREMIUM_PERMALINK = "quizify-premium"
+GUMROAD_EVENT_PERMALINK = "quizify-event"
+APP_NAME = "Quizify"
+
+# Secrets (set with: wrangler secret put AUTH_SECRET)
+# AUTH_SECRET = JWT signing secret

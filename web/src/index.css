@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply font-body text-slate-800 bg-cream;
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(167, 139, 250, 0.18) 0, transparent 32%),
+    radial-gradient(circle at 90% 20%, rgba(249, 168, 212, 0.20) 0, transparent 30%),
+    radial-gradient(circle at 30% 90%, rgba(253, 230, 138, 0.25) 0, transparent 35%),
+    radial-gradient(circle at 85% 85%, rgba(103, 232, 249, 0.18) 0, transparent 30%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+h1, h2, h3, .font-display { font-family: 'Baloo 2', system-ui, sans-serif; }
+
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 font-display font-bold text-lg transition-all active:translate-y-1 active:shadow-none select-none cursor-pointer;
+}
+.btn-primary { @apply btn bg-grape text-white shadow-pop hover:bg-grape-dark; }
+.btn-pink { @apply btn bg-bubble text-white shadow-pop hover:brightness-110; }
+.btn-sunny { @apply btn bg-sunny text-slate-900 shadow-pop hover:brightness-105; }
+.btn-ghost { @apply btn bg-white/70 text-grape border-2 border-grape/30 hover:border-grape; }
+.card { @apply bg-white rounded-3xl shadow-card p-6; }
+.input {
+  @apply w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg outline-none transition-colors focus:border-grape;
+}
+.chip {
+  @apply inline-flex items-center gap-1.5 rounded-full px-4 py-2 font-bold text-sm cursor-pointer border-2 transition-all select-none;
+}
