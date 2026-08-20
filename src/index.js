@@ -209,7 +209,14 @@ app.post('/api/ai/generate', auth, async (c) => {
       }
     }
   } catch (e) {
-    return c.json({ error: 'ai_failed', message: `La génération a échoué (${e.message}). Réessaie dans quelques secondes !` }, 502);
+    // Quota quotidien du moteur atteint : message clair, sans jargon technique.
+    if (/neuron|allocation|capacity|429|quota/i.test(e.message || '')) {
+      return c.json({
+        error: 'engine_busy',
+        message: "Beaucoup de quiz ont été créés aujourd'hui ! La création repart dans quelques heures. En attendant, tes quiz déjà enregistrés et les blind tests fonctionnent normalement.",
+      }, 503);
+    }
+    return c.json({ error: 'ai_failed', message: 'La création a échoué. Réessaie dans quelques secondes !' }, 502);
   }
 
   if (useBonus) {
