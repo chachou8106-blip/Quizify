@@ -1,10 +1,15 @@
 // Quizzalo — Cloudflare Worker API + static SPA + Durable Object live games.
 
 import { Hono } from 'hono';
-import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
+import { hashPassword, randomHex, signJWT, requireAuth, verifyJWT } from './auth';
 import { generateQuestions, generateMathQuestions, generateAnagramQuestions, generateVerifiedQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
 import { wikiContext } from './wiki';
+import {
+  fingerprintAll, drawUnseen, knownFingerprints, storeQuestions, markSeen,
+  seenAnswerKeys, unseenTracks, markTracksSeen,
+} from './bank';
+import { exportBank } from './exportBank';
 export { GameRoom } from './GameRoom';
 
 const app = new Hono();
@@ -119,6 +124,50 @@ app.get('/api/auth/me', auth, async (c) => {
 
 app.get('/api/categories', (c) => c.json({ categories: CATEGORIES }));
 
+// L'empreinte est une mécanique interne : elle ne sort jamais vers le joueur.
+function stripInternal(q) {
+  return {
+    question: q.question, options: q.options, correct: q.correct,
+    explanation: q.explanation || '',
+  };
+}
+
+// Les liens « Pour aller plus loin » attachés aux questions tirées de la banque.
+function sourcesOf(questions) {
+  const out = [];
+  for (const q of questions) {
+    if (!q.sourceUrl || out.some((s) => s.url === q.sourceUrl)) continue;
+    out.push({ title: q.sourceTitle || q.sourceUrl, url: q.sourceUrl });
+  }
+  return out.length ? out.slice(0, 6) : null;
+}
+
+// Identifie le joueur si un jeton est présent, sans jamais refuser la requête.
+// (Le blind test reste ouvert aux invités : ils n'ont simplement pas de mémoire.)
+async function softUser(c) {
+  try {
+    const h = c.req.header('Authorization') || '';
+    if (!h.startsWith('Bearer ')) return null;
+    return await verifyJWT(h.slice(7), await secret(c));
+  } catch {
+    return null;
+  }
+}
+
+// Quelles empreintes ce joueur a-t-il déjà rencontrées ?
+async function seenByUser(env, userId, fps) {
+  if (!userId || !fps.length) return new Set();
+  try {
+    const marks = fps.map(() => '?').join(',');
+    const rows = await env.DB.prepare(
+      `SELECT fp FROM question_seen WHERE user_id = ? AND fp IN (${marks})`
+    ).bind(userId, ...fps).all();
+    return new Set((rows.results || []).map((r) => r.fp));
+  } catch {
+    return new Set();
+  }
+}
+
 app.post('/api/ai/generate', auth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
@@ -127,12 +176,40 @@ app.post('/api/ai/generate', auth, async (c) => {
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
 
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
+  // On en fabrique plus que nécessaire et on écarte ce que ce joueur a déjà vu.
   if (type === 'math') {
-    const questions = generateMathQuestions({
-      count: Math.min(Math.max(parseInt(count) || 8, 1), 20),
-      difficulty,
-    });
-    return c.json({ questions });
+    const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+    // En calcul, deux questions différentes tombent souvent sur le même résultat :
+    // on ne filtre donc que sur la question elle-même, jamais sur la réponse.
+    const pool = (await fingerprintAll(generateMathQuestions({ count: n * 4, difficulty })))
+      .map((q) => ({ ...q, ak: null }));
+    const already = await seenByUser(c.env, user.id, pool.map((q) => q.fp));
+    const uniq = [];
+    const used = new Set();
+    for (const q of pool) {
+      if (already.has(q.fp) || used.has(q.fp)) continue;
+      used.add(q.fp);
+      uniq.push(q);
+      if (uniq.length >= n) break;
+    }
+    const questions = uniq.length >= Math.min(3, n) ? uniq : pool.slice(0, n);
+    c.executionCtx.waitUntil((async () => {
+      await storeQuestions(c.env, questions, { category: 'education', topic: 'calcul mental', type, difficulty, language });
+      await markSeen(c.env, user.id, questions);
+    })());
+    return c.json({ questions: questions.map(stripInternal) });
+  }
+
+  // ---- La banque d'abord : des questions inédites, sans rien consommer ------
+  const totalWanted = Math.min(Math.max(parseInt(count) || 5, 1), 40);
+  const fromBank = personalFacts ? [] : await drawUnseen(c.env, {
+    userId: user.id, topic: String(topic || ''), type, difficulty, language, limit: totalWanted,
+  });
+  // Tout est déjà disponible et inédit pour ce joueur : service immédiat et gratuit.
+  if (fromBank.length >= totalWanted) {
+    const picked = fromBank.slice(0, totalWanted);
+    c.executionCtx.waitUntil(markSeen(c.env, user.id, picked));
+    return c.json({ questions: picked.map(stripInternal), sources: sourcesOf(picked), verified: true });
   }
 
   const plan = await getPlan(c, user.id);
@@ -154,7 +231,8 @@ app.post('/api/ai/generate', auth, async (c) => {
   let questions;
   let sources = null;
   try {
-    const total = Math.min(Math.max(parseInt(count) || 5, 1), 40);
+    // On ne fabrique que ce que la banque n'a pas pu fournir.
+    const total = totalWanted - fromBank.length;
     const baseOpts = {
       topic: String(topic || '').slice(0, 2000),
       category, type, difficulty, language,
@@ -219,6 +297,50 @@ app.post('/api/ai/generate', auth, async (c) => {
     return c.json({ error: 'ai_failed', message: 'La création a échoué. Réessaie dans quelques secondes !' }, 502);
   }
 
+  // ---- Filtre anti-doublon sur ce qui vient d'être fabriqué ------------------
+  // Une question déjà présente dans la banque mondiale, ou déjà vue par ce
+  // joueur, ou répétée dans le même lot, est écartée.
+  let fresh = await fingerprintAll(questions || [], String(topic || ''));
+  if (!personalFacts) {
+    const fps = fresh.map((q) => q.fp);
+    const [inBank, alreadySeen, answersSeen] = await Promise.all([
+      knownFingerprints(c.env, fps),
+      seenByUser(c.env, user.id, fps),
+      seenAnswerKeys(c.env, user.id, fresh.map((q) => q.ak)),
+    ]);
+    const usedFp = new Set(fromBank.map((q) => q.fp));
+    const usedAk = new Set(fromBank.map((q) => q.ak).filter(Boolean));
+    const kept = [];
+    for (const q of fresh) {
+      if (usedFp.has(q.fp) || alreadySeen.has(q.fp)) continue;
+      // Même réponse sur le même sujet = même question reformulée.
+      if (q.ak && (usedAk.has(q.ak) || answersSeen.has(q.ak))) continue;
+      usedFp.add(q.fp);
+      if (q.ak) usedAk.add(q.ak);
+      kept.push({ ...q, fromBank: inBank.has(q.fp) });
+    }
+    // Garde-fou : si le filtre vide le quiz (sujet très étroit, banque déjà
+    // saturée), on préfère rendre le quiz d'origine qu'un quiz vide.
+    if (kept.length >= Math.min(3, fresh.length)) fresh = kept;
+  }
+
+  const merged = [...fromBank, ...fresh].slice(0, totalWanted);
+  questions = merged;
+  const bankSources = sourcesOf(fromBank);
+  if (bankSources) sources = [...(sources || []), ...bankSources].filter(
+    (s, i, arr) => arr.findIndex((o) => o.url === s.url) === i
+  ).slice(0, 6);
+
+  if (!personalFacts) {
+    c.executionCtx.waitUntil((async () => {
+      await storeQuestions(c.env, fresh, {
+        category, topic: String(topic || ''), type, difficulty, language,
+        source: sources?.[0] || null,
+      });
+      await markSeen(c.env, user.id, merged);
+    })());
+  }
+
   if (useBonus) {
     await c.env.DB.prepare('UPDATE users SET bonus_ai = MAX(0, bonus_ai - 1) WHERE id = ?').bind(user.id).run();
   } else {
@@ -227,7 +349,7 @@ app.post('/api/ai/generate', auth, async (c) => {
     ).bind(user.id, monthKey()).run();
   }
 
-  return c.json({ questions, sources, verified: true });
+  return c.json({ questions: questions.map(stripInternal), sources, verified: true });
 });
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
@@ -389,7 +511,12 @@ app.get('/api/music/blindtest', async (c) => {
     return c.json({ error: 'Pas assez de morceaux trouvés pour ce thème — essaie d\'autres artistes ou genres.' }, 404);
   }
 
-  const answers = pool.slice(0, Math.min(count, pool.length));
+  // Anti-répétition : on met devant les morceaux que ce joueur n'a jamais entendus
+  // dans l'application. S'il a déjà tout écouté, on complète avec le reste.
+  const player = await softUser(c);
+  const ordered = player ? await unseenTracks(c.env, player.id, pool, count) : pool;
+
+  const answers = ordered.slice(0, Math.min(count, ordered.length));
   const questions = answers.map((track) => {
     const label = (t) => `${t.title} — ${t.artist}`;
     const distractors = shuffle(pool.filter((t) => t !== track)).slice(0, 3);
@@ -403,6 +530,7 @@ app.get('/api/music/blindtest', async (c) => {
       artwork: track.art,
     };
   });
+  if (player) c.executionCtx.waitUntil(markTracksSeen(c.env, player.id, answers));
   return c.json({ questions });
 });
 
@@ -671,6 +799,54 @@ app.get('/api/selftest', async (c) => {
   return c.json(out);
 });
 
+// ---- Banque de questions : pilotage (protégé par AUTH_SECRET) --------------
+
+// Enregistre le jeton GitHub qui autorise l'export nocturne.
+// À créer sur github.com/settings/tokens (fine-grained), limité au seul dépôt
+// Quizify, avec la permission « Contents: Read and write ». Rien d'autre.
+app.post('/api/bank/token', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const { token } = await c.req.json().catch(() => ({}));
+  if (!token || typeof token !== 'string') return c.json({ error: 'jeton manquant' }, 400);
+  await c.env.DB.prepare(
+    'INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).bind('github_token', token.trim()).run();
+  return c.json({ ok: true });
+});
+
+// État de la banque : combien de questions, dans quelles catégories.
+app.get('/api/bank/stats', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const total = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_bank').first();
+  const byCat = await c.env.DB.prepare(
+    'SELECT category, type, COUNT(*) AS n FROM question_bank GROUP BY category, type ORDER BY n DESC'
+  ).all();
+  const seen = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_seen').first();
+  const tracks = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM track_seen').first();
+  const tokenSet = !!(await c.env.DB.prepare('SELECT value FROM settings WHERE key = ?').bind('github_token').first());
+  return c.json({ questions: total?.n || 0, parCategorie: byCat.results || [], vues: seen?.n || 0, morceauxVus: tracks?.n || 0, exportPret: tokenSet });
+});
+
+// Déclenche l'export tout de suite (asynchrone, résultat dans KV).
+app.get('/api/bank/export', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const id = c.req.query('id') || randomHex(4);
+  const dryRun = c.req.query('dry') === '1';
+  c.executionCtx.waitUntil((async () => {
+    let payload;
+    try { payload = { done: true, ...(await exportBank(c.env, { dryRun })) }; }
+    catch (e) { payload = { done: true, error: e.message }; }
+    await c.env.KV.put(`export:${id}`, JSON.stringify(payload), { expirationTtl: 3600 });
+  })());
+  return c.json({ started: true, id });
+});
+
+app.get('/api/bank/export/get', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const raw = await c.env.KV.get(`export:${c.req.query('id')}`);
+  return raw ? c.json(JSON.parse(raw)) : c.json({ done: false });
+});
+
 app.notFound((c) => {
   if (new URL(c.req.url).pathname.startsWith('/api/')) return c.json({ error: 'Not Found' }, 404);
   return c.env.ASSETS.fetch(c.req.raw);
@@ -680,5 +856,7 @@ export default {
   fetch: app.fetch,
   async scheduled(event, env, ctx) {
     ctx.waitUntil(reverifyAll(env));
+    // Publication nocturne de la banque de questions vers GitHub (un commit/nuit).
+    ctx.waitUntil(exportBank(env).catch(() => {}));
   },
 };
