@@ -503,7 +503,7 @@ async function crossCheck(env, questions) {
   const list = questions.map((q, i) =>
     `${i}. ${q.question}\n${q.options.map((o, j) => `   ${j}) ${o}`).join('\n')}`
   ).join('\n');
-  const prompt = `Réponds à ce questionnaire. Pour chaque question, donne l'INDEX (0 à 3) de la seule réponse exacte.
+  const prompt = `Réponds à ce questionnaire. Pour chaque question, donne l'INDEX de la seule réponse exacte, parmi les index proposés sous la question.
 Si tu n'es pas certain à 100 %, ou si plusieurs réponses peuvent convenir, réponds -1.
 
 ${list}
@@ -533,11 +533,15 @@ export async function generateQuestions(env, opts) {
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
   // On en demande quelques-unes de plus : les contrôles en écartent toujours une partie,
   // et l'utilisateur doit recevoir le nombre de questions qu'il a demandé.
-  const asked = Math.min(count + Math.ceil(count / 3) + 1, 20);
+  const asked = Math.min(count + 3, 20);
   const prompt = buildPrompt({ ...opts, count: asked });
+
+  // Budget de temps : mieux vaut un quiz un peu plus court qu'une génération qui n'aboutit jamais.
+  const started = Date.now();
 
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0 && Date.now() - started > 40000) break;
     try {
       const res = await env.AI.run(MODEL, {
         messages: [
@@ -560,7 +564,7 @@ export async function generateQuestions(env, opts) {
           if (verified.length >= Math.min(3, questions.length)) questions = verified;
         } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
         // Contre-épreuve à l'aveugle : dernier filet avant affichage.
-        questions = await crossCheck(env, questions);
+        if (Date.now() - started < 45000) questions = await crossCheck(env, questions);
       }
       return questions.slice(0, count);
     } catch (e) {
