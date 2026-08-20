@@ -32,7 +32,7 @@ export default function Home() {
 
       {/* Rejoindre */}
       <section className="card mx-auto max-w-md border-2 border-sunny/60 text-center">
-        <h2 className="font-display text-2xl font-extrabold">🎮 Une partie t'attend ?</h2>
+        <h2 className="font-display text-2xl font-extrabold">🎮 Une partie t'attend&nbsp;?</h2>
         <p className="mt-1 font-semibold text-white/60">Entre le code affiché par l'animateur</p>
         <form onSubmit={join} className="mt-4 flex gap-2">
           <input
@@ -63,7 +63,7 @@ export default function Home() {
 
       {/* Comment ça marche */}
       <section>
-        <h2 className="text-center font-display text-3xl font-extrabold">Comment ça marche ?</h2>
+        <h2 className="text-center font-display text-3xl font-extrabold">Comment ça marche&nbsp;?</h2>
         <div className="mt-7 grid gap-5 sm:grid-cols-3">
           {[
             ['bg-grape', '1', 'Choisis ton sujet', 'Les années 80, les dinosaures, ta sœur… absolument tout fonctionne.'],
@@ -84,7 +84,7 @@ export default function Home() {
       {/* Anniversaire */}
       <section className="card border-2 border-bubble/40 bg-gradient-to-br from-bubble/25 to-grape/25 text-center">
         <div className="text-5xl">🎂</div>
-        <h2 className="mt-2 font-display text-3xl font-extrabold">Un anniversaire à fêter ?</h2>
+        <h2 className="mt-2 font-display text-3xl font-extrabold">Un anniversaire à fêter&nbsp;?</h2>
         <p className="mx-auto mt-2 max-w-lg text-lg font-semibold text-white/75">
           Raconte quelques anecdotes sur la star du jour et découvre qui la connaît vraiment le mieux.
           Fous rires garantis.
