@@ -287,8 +287,13 @@ STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
 Génère EXACTEMENT ${perBatch} questions (4 options, une seule correcte, position variée).
 Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b","c","d"],"correct":0,"explanation":"..."}]`;
 
+  // Budget de temps : on enchaîne les passes tant qu'il reste du temps, jamais au-delà.
+  const started = Date.now();
+  const DEADLINE = 38000;
+
   let candidates = [];
   for (let attempt = 0; attempt < 4 && candidates.length < target; attempt++) {
+    if (attempt > 0 && Date.now() - started > DEADLINE) break;
     try {
       const extra = attempt === 0 ? '' : `\n\nATTENTION : porte ces questions sur des informations DIFFÉRENTES de celles-ci, déjà utilisées : ${candidates.slice(-12).map((c) => c.question).join(' | ')}`;
       const res = await env.AI.run(MODEL, {
