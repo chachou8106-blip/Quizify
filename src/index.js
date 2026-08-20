@@ -536,6 +536,53 @@ app.get('/ads.txt', (c) => {
   return c.text(`google.com, ${c.env.ADSENSE_CLIENT.replace('ca-', '')}, DIRECT, f08c47fec0942fa0\n`);
 });
 
+// Audit qualité (protégé) : génère un quiz sans quota, format compact pour relecture.
+app.get('/api/audit', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const topic = c.req.query('topic') || 'culture générale';
+  const category = c.req.query('cat') || 'culture';
+  const type = c.req.query('type') || 'multipleChoice';
+  const count = Math.min(parseInt(c.req.query('count')) || 5, 15);
+  const difficulty = c.req.query('difficulty') || 'medium';
+  try {
+    let questions;
+    if (type === 'math') questions = generateMathQuestions({ count, difficulty });
+    else if (type === 'anagram') questions = await generateAnagramQuestions(c.env, { topic, count });
+    else questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
+    return c.json({
+      questions: questions.map((q) => ({ q: q.question, ok: q.options[q.correct], opts: q.options, why: q.explanation })),
+    });
+  } catch (e) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// Diagnostic des sources externes (Wikipédia / Wiktionnaire)
+app.get('/api/wiki/debug', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const term = c.req.query('q') || 'Napoléon Ier';
+  const out = {};
+  try {
+    const r = await fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`,
+      { headers: { 'User-Agent': 'Quizzalo/1.0 (education quiz app)' } });
+    const d = r.ok ? await r.json() : null;
+    out.wikipedia = { status: r.status, title: d?.title || null, extract: d?.extract?.slice(0, 180) || null };
+  } catch (e) { out.wikipedia = { error: e.message }; }
+  try {
+    const r = await fetch(`https://fr.wiktionary.org/w/api.php?action=query&titles=${encodeURIComponent('cheval')}&format=json`,
+      { headers: { 'User-Agent': 'Quizzalo/1.0 (education quiz app)' } });
+    const d = r.ok ? await r.json() : null;
+    out.wiktionary = { status: r.status, found: d ? !Object.keys(d.query?.pages || { '-1': 1 }).includes('-1') : null };
+  } catch (e) { out.wiktionary = { error: e.message }; }
+  try {
+    const r = await fetch('https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=Louis%20XIV&format=json&srlimit=2',
+      { headers: { 'User-Agent': 'Quizzalo/1.0 (education quiz app)' } });
+    const d = r.ok ? await r.json() : null;
+    out.wikiSearch = { status: r.status, hits: (d?.query?.search || []).map((s) => s.title) };
+  } catch (e) { out.wikiSearch = { error: e.message }; }
+  return c.json(out);
+});
+
 app.get('/api/health', (c) => c.json({ status: 'ok', app: c.env.APP_NAME || 'Quizzalo' }));
 
 // Protected self-test: verifies AI, D1 and KV in production. GET /api/selftest?key=<AUTH_SECRET>
