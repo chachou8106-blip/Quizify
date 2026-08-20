@@ -10,6 +10,11 @@ import {
   seenAnswerKeys, unseenTracks, markTracksSeen,
 } from './bank';
 import { exportBank } from './exportBank';
+import {
+  CREDENTIALS, getSetting, setSetting, maskValue, logError,
+  overview, listQuizzes, listUsers, bankStats, listErrors, listVideos,
+  gumroadStats, youtubeStats, cloudflareStats, githubStats,
+} from './admin';
 export { GameRoom } from './GameRoom';
 
 const app = new Hono();
@@ -102,18 +107,18 @@ app.post('/api/auth/login', async (c) => {
   if (hash !== u.pass_hash) return c.json({ error: 'Email ou mot de passe incorrect' }, 401);
   const token = await signJWT({ id: u.id, email: u.email, name: u.name }, await secret(c));
   const plan = await getPlan(c, u.id);
-  return c.json({ token, user: { id: u.id, email: u.email, name: u.name, plan } });
+  return c.json({ token, user: { id: u.id, email: u.email, name: u.name, plan, isAdmin: !!u.is_admin } });
 });
 
 app.get('/api/auth/me', auth, async (c) => {
   const user = c.get('user');
-  const u = await c.env.DB.prepare('SELECT id, email, name, plan, plan_expires, bonus_ai FROM users WHERE id = ?').bind(user.id).first();
+  const u = await c.env.DB.prepare('SELECT id, email, name, plan, plan_expires, bonus_ai, is_admin FROM users WHERE id = ?').bind(user.id).first();
   if (!u) return c.json({ error: 'Compte introuvable' }, 404);
   const plan = await getPlan(c, u.id);
   const usage = await c.env.DB.prepare('SELECT count FROM ai_usage WHERE user_id = ? AND month = ?')
     .bind(u.id, monthKey()).first();
   return c.json({
-    user: { id: u.id, email: u.email, name: u.name, plan, plan_expires: u.plan_expires },
+    user: { id: u.id, email: u.email, name: u.name, plan, plan_expires: u.plan_expires, isAdmin: !!u.is_admin },
     aiUsed: usage?.count || 0,
     aiQuota: plan === 'free' ? FREE_AI_PER_MONTH : null,
     aiBonus: u.bonus_ai || 0,
@@ -289,7 +294,12 @@ app.post('/api/ai/generate', auth, async (c) => {
     }
   } catch (e) {
     // Quota quotidien du moteur atteint : message clair, sans jargon technique.
-    if (/neuron|allocation|capacity|429|quota/i.test(e.message || '')) {
+    const busy = /neuron|allocation|capacity|429|quota/i.test(e.message || '');
+    c.executionCtx.waitUntil(logError(
+      c.env, busy ? 'moteur-sature' : 'creation',
+      e.message, `sujet: ${String(topic || '').slice(0, 120)} · style: ${type} · ${count} questions`, user.id
+    ));
+    if (busy) {
       return c.json({
         error: 'engine_busy',
         message: "Beaucoup de quiz ont été créés aujourd'hui ! La création repart dans quelques heures. En attendant, tes quiz déjà enregistrés et les blind tests fonctionnent normalement.",
@@ -553,6 +563,7 @@ app.get('/api/music/blindtest', async (c) => {
     pool.push(track);
   }
   if (pool.length < 4) {
+    c.executionCtx.waitUntil(logError(c.env, 'blind-test', 'Pas assez de morceaux', `thèmes: ${themesParam || q} · artistes: ${artistsParam}`));
     return c.json({ error: 'Pas assez de morceaux trouvés pour ce thème — essaie d\'autres artistes ou genres.' }, 404);
   }
 
@@ -975,6 +986,137 @@ app.get('/api/bank/selftest', async (c) => {
 app.get('/api/bank/export/get', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const raw = await c.env.KV.get(`export:${c.req.query('id')}`);
+  return raw ? c.json(JSON.parse(raw)) : c.json({ done: false });
+});
+
+// ===========================================================================
+// Console d'administration — réservée au compte propriétaire.
+// La protection est ici, côté serveur : cacher le bouton ne protège rien.
+// ===========================================================================
+const admin = async (c, next) => {
+  const user = c.get('user');
+  const u = await c.env.DB.prepare('SELECT is_admin FROM users WHERE id = ?').bind(user.id).first();
+  if (!u?.is_admin) return c.json({ error: 'Accès réservé' }, 403);
+  await next();
+};
+
+app.get('/api/admin/overview', auth, admin, async (c) => c.json(await overview(c.env)));
+
+app.get('/api/admin/quizzes', auth, admin, async (c) => c.json(await listQuizzes(c.env, {
+  q: c.req.query('q') || '',
+  category: c.req.query('cat') || '',
+  page: Math.max(0, parseInt(c.req.query('page')) || 0),
+  perPage: Math.min(100, parseInt(c.req.query('per')) || 25),
+})));
+
+// Consulter n'importe quel quiz, y compris ceux des autres joueurs.
+app.get('/api/admin/quiz/:id', auth, admin, async (c) => {
+  const q = await c.env.DB.prepare(
+    `SELECT q.*, u.email, u.name AS auteur FROM quizzes q
+       LEFT JOIN users u ON u.id = q.user_id WHERE q.id = ?`
+  ).bind(c.req.param('id')).first();
+  if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
+  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions), sources: q.sources ? JSON.parse(q.sources) : null } });
+});
+
+app.delete('/api/admin/quiz/:id', auth, admin, async (c) => {
+  await c.env.DB.prepare('DELETE FROM quizzes WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/users', auth, admin, async (c) => c.json(await listUsers(c.env)));
+
+// Changer le plan d'un joueur ou lui offrir des créations.
+app.post('/api/admin/user/:id', auth, admin, async (c) => {
+  const { plan, bonus, resetQuota } = await c.req.json().catch(() => ({}));
+  const id = c.req.param('id');
+  if (plan && ['free', 'premium', 'event'].includes(plan)) {
+    await c.env.DB.prepare('UPDATE users SET plan = ?, plan_expires = NULL WHERE id = ?').bind(plan, id).run();
+  }
+  if (Number.isInteger(bonus)) {
+    await c.env.DB.prepare('UPDATE users SET bonus_ai = MAX(0, bonus_ai + ?) WHERE id = ?').bind(bonus, id).run();
+  }
+  if (resetQuota) {
+    await c.env.DB.prepare('DELETE FROM ai_usage WHERE user_id = ? AND month = ?').bind(id, monthKey()).run();
+  }
+  return c.json({ ok: true });
+});
+
+app.get('/api/admin/bank', auth, admin, async (c) => c.json(await bankStats(c.env)));
+app.get('/api/admin/errors', auth, admin, async (c) => c.json(await listErrors(c.env)));
+
+app.delete('/api/admin/errors', auth, admin, async (c) => {
+  await c.env.DB.prepare('DELETE FROM app_errors').run();
+  return c.json({ ok: true });
+});
+
+// --- Vidéos : suivi de ce qui est produit et de ce qui est publié -----------
+app.get('/api/admin/videos', auth, admin, async (c) => c.json(await listVideos(c.env)));
+
+app.post('/api/admin/videos', auth, admin, async (c) => {
+  const { quizId = null, title, platform = 'youtube', status = 'a_publier', url = null, note = null } = await c.req.json().catch(() => ({}));
+  if (!title) return c.json({ error: 'Titre manquant' }, 400);
+  const id = randomHex(8);
+  await c.env.DB.prepare(
+    'INSERT INTO videos (id, quiz_id, title, platform, status, url, note) VALUES (?,?,?,?,?,?,?)'
+  ).bind(id, quizId, title.slice(0, 160), platform, status, url, note).run();
+  return c.json({ ok: true, id }, 201);
+});
+
+app.post('/api/admin/video/:id', auth, admin, async (c) => {
+  const { status, url, note } = await c.req.json().catch(() => ({}));
+  const published = status === 'publie' ? "datetime('now')" : 'published_at';
+  await c.env.DB.prepare(
+    `UPDATE videos SET status = COALESCE(?, status), url = COALESCE(?, url),
+            note = COALESCE(?, note), published_at = ${published} WHERE id = ?`
+  ).bind(status || null, url || null, note || null, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.delete('/api/admin/video/:id', auth, admin, async (c) => {
+  await c.env.DB.prepare('DELETE FROM videos WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// --- Coffre à identifiants --------------------------------------------------
+app.get('/api/admin/settings', auth, admin, async (c) => {
+  const out = [];
+  for (const cred of CREDENTIALS) {
+    const v = await getSetting(c.env, cred.key);
+    out.push({ ...cred, rempli: !!v, apercu: maskValue(cred.key, v) });
+  }
+  return c.json({ identifiants: out });
+});
+
+app.post('/api/admin/settings', auth, admin, async (c) => {
+  const { key, value } = await c.req.json().catch(() => ({}));
+  if (!CREDENTIALS.some((x) => x.key === key)) return c.json({ error: 'Clé inconnue' }, 400);
+  await setSetting(c.env, key, value ?? '');
+  return c.json({ ok: true });
+});
+
+// --- Argent, audience, infrastructure ---------------------------------------
+// Chaque bloc est appelé séparément : une intégration lente ou en panne ne doit
+// pas empêcher les autres de s'afficher.
+app.get('/api/admin/gumroad', auth, admin, async (c) => c.json(await gumroadStats(c.env)));
+app.get('/api/admin/youtube', auth, admin, async (c) => c.json(await youtubeStats(c.env)));
+app.get('/api/admin/cloudflare', auth, admin, async (c) => c.json(await cloudflareStats(c.env)));
+app.get('/api/admin/github', auth, admin, async (c) => c.json(await githubStats(c.env)));
+
+// Relancer l'export de la banque vers GitHub à la demande.
+app.post('/api/admin/export', auth, admin, async (c) => {
+  const id = randomHex(4);
+  c.executionCtx.waitUntil((async () => {
+    let payload;
+    try { payload = { done: true, ...(await exportBank(c.env)) }; }
+    catch (e) { payload = { done: true, error: e.message }; await logError(c.env, 'export', e.message); }
+    await c.env.KV.put(`export:${id}`, JSON.stringify(payload), { expirationTtl: 3600 });
+  })());
+  return c.json({ started: true, id });
+});
+
+app.get('/api/admin/export/:id', auth, admin, async (c) => {
+  const raw = await c.env.KV.get(`export:${c.req.param('id')}`);
   return raw ? c.json(JSON.parse(raw)) : c.json({ done: false });
 });
 

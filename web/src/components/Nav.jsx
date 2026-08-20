@@ -24,6 +24,8 @@ export default function Nav() {
           {user ? (
             <>
               <Link to="/quizzes" className="font-bold text-white/75 hover:text-grape-light">Mes quiz</Link>
+              {/* Visible du seul compte propriétaire. */}
+              {user.isAdmin && <Link to="/admin" className="font-bold text-sunny hover:text-sunny-light" title="Console">🛠️</Link>}
               <span className="rounded-full bg-grape/10 px-3 py-1 text-sm font-bold text-grape-light">
                 {user.plan === 'premium' ? '👑 Premium' : user.plan === 'event' ? '🎉 Pass Événement' : `⚡ ${Math.max(0, aiQuota - aiUsed) + aiBonus} quiz`}
               </span>
@@ -41,7 +43,7 @@ export default function Nav() {
 
       {open && (
         <div className="flex flex-col gap-1 border-t border-white/10 bg-[#161130] px-4 py-3 sm:hidden">
-          {[['Créer un quiz', '/create'], ['Blind test musical 🎧', '/blindtest'], ['Découvrir 🧭', '/explore'], ['Studio Shorts 🎬', '/studio'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : [])].map(([label, to]) => (
+          {[['Créer un quiz', '/create'], ['Blind test musical 🎧', '/blindtest'], ['Découvrir 🧭', '/explore'], ['Studio Shorts 🎬', '/studio'], ['Rejoindre une partie', '/join'], ['Quiz anniversaire 🎂', '/birthday'], ['Tarifs', '/pricing'], ...(user ? [['Mes quiz', '/quizzes']] : []), ...(user?.isAdmin ? [['🛠️ Console', '/admin']] : [])].map(([label, to]) => (
             <Link key={to} to={to} onClick={() => setOpen(false)} className="rounded-xl px-3 py-2.5 font-bold text-white/85 hover:bg-grape/10">{label}</Link>
           ))}
           {user ? (

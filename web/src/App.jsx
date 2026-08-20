@@ -16,6 +16,7 @@ import Join from './pages/Join';
 import Reward from './pages/Reward';
 import Explore from './pages/Explore';
 import Studio from './pages/Studio';
+import Admin from './pages/Admin';
 
 export default function App() {
   const location = useLocation();
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/join" element={<Join />} />
           <Route path="/join/:pin" element={<Join />} />
           <Route path="/reward/:code" element={<Reward />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
