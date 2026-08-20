@@ -849,70 +849,82 @@ app.get('/api/bank/selftest', async (c) => {
   const topic = c.req.query('topic') || 'Louis XIV';
   const type = c.req.query('type') || 'multipleChoice';
   const count = Math.min(parseInt(c.req.query('count')) || 6, 12);
-  const uid = `selftest-${randomHex(5)}`;
+  // Une génération complète dépasse le temps d'une requête : on procède en deux
+  // passes (phase=1 puis phase=2), avec le même joueur factice.
+  const phase = c.req.query('phase') === '2' ? 2 : 1;
+  const uid = `selftest-${id}`;
 
   c.executionCtx.waitUntil((async () => {
-    let payload;
+    const run = async (token) => {
+      const res = await app.fetch(new Request('https://selftest/api/ai/generate', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, type, count, difficulty: 'medium', language: 'fr' }),
+      }), c.env, c.executionCtx);
+      return res.json();
+    };
+    const norm = (q) => q.question.toLowerCase().replace(/\W+/g, ' ').trim();
+    const ansNorm = (q) => String(q.options[q.correct]).toLowerCase().replace(/\W+/g, ' ').trim();
+
     try {
-      await c.env.DB.prepare(
-        "INSERT INTO users (id, email, name, pass_hash, salt, plan) VALUES (?,?,?,'x','x','premium')"
-      ).bind(uid, `${uid}@selftest.local`, 'Autotest').run();
-      const token = await signJWT({ id: uid, email: `${uid}@selftest.local`, name: 'Autotest' }, await secret(c));
-
-      const run = async () => {
-        const res = await app.fetch(new Request('https://selftest/api/ai/generate', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, type, count, difficulty: 'medium', language: 'fr' }),
-        }), c.env, c.executionCtx);
-        return res.json();
-      };
-
-      const first = await run();
-      // La mémoire du joueur s'écrit en tâche de fond : on attend qu'elle soit posée.
-      for (let i = 0; i < 20; i++) {
-        const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_seen WHERE user_id = ?').bind(uid).first();
-        if ((n?.n || 0) >= (first.questions?.length || 1)) break;
-        await new Promise((r) => setTimeout(r, 300));
+      if (phase === 1) {
+        await c.env.DB.prepare(
+          "INSERT OR IGNORE INTO users (id, email, name, pass_hash, salt, plan) VALUES (?,?,?,'x','x','premium')"
+        ).bind(uid, `${uid}@selftest.local`, 'Autotest').run();
+        const token = await signJWT({ id: uid, email: `${uid}@selftest.local`, name: 'Autotest' }, await secret(c));
+        const first = await run(token);
+        // La mémoire du joueur s'écrit en tâche de fond : on attend qu'elle soit posée.
+        for (let i = 0; i < 25; i++) {
+          const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_seen WHERE user_id = ?').bind(uid).first();
+          if ((n?.n || 0) >= (first.questions?.length || 1)) break;
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        await c.env.KV.put(`export:${id}`, JSON.stringify({
+          done: true, phase: 1, topic, type,
+          quiz1: (first.questions || []).length,
+          questions1: (first.questions || []).map((q) => q.question),
+          reponses1: (first.questions || []).map((q) => q.options[q.correct]),
+          _n: (first.questions || []).map(norm),
+          _a: (first.questions || []).map(ansNorm),
+          erreur: first.error || null,
+          suite: 'relancer avec &phase=2',
+        }), { expirationTtl: 3600 });
+        return;
       }
-      const second = await run();
 
-      const norm = (q) => q.question.toLowerCase().replace(/\W+/g, ' ').trim();
-      const ansNorm = (q) => String(q.options[q.correct]).toLowerCase().replace(/\W+/g, ' ').trim();
-      const set1 = new Set((first.questions || []).map(norm));
-      const ans1 = new Set((first.questions || []).map(ansNorm));
-      const repeatedQuestions = (second.questions || []).filter((q) => set1.has(norm(q))).map((q) => q.question);
-      const repeatedAnswers = (second.questions || []).filter((q) => ans1.has(ansNorm(q))).map((q) => q.options[q.correct]);
-
-      const bank = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_bank WHERE topic_key IS NOT NULL').first();
-      payload = {
-        done: true, topic, type,
-        quiz1: (first.questions || []).length,
+      const prev = JSON.parse((await c.env.KV.get(`export:${id}`)) || '{}');
+      const token = await signJWT({ id: uid, email: `${uid}@selftest.local`, name: 'Autotest' }, await secret(c));
+      const second = await run(token);
+      const set1 = new Set(prev._n || []);
+      const ans1 = new Set(prev._a || []);
+      const repQ = (second.questions || []).filter((q) => set1.has(norm(q))).map((q) => q.question);
+      const repA = (second.questions || []).filter((q) => ans1.has(ansNorm(q))).map((q) => q.options[q.correct]);
+      const bank = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_bank').first();
+      await c.env.KV.put(`export:${id}`, JSON.stringify({
+        done: true, phase: 2, topic, type,
+        quiz1: prev.quiz1 || 0,
         quiz2: (second.questions || []).length,
-        questionsRepetees: repeatedQuestions,
-        reponsesRepetees: repeatedAnswers,
-        verdict: repeatedQuestions.length === 0 && repeatedAnswers.length === 0
-          ? 'AUCUN DOUBLON' : 'DOUBLON DETECTE',
+        questionsRepetees: repQ,
+        reponsesRepetees: repA,
+        verdict: repQ.length === 0 && repA.length === 0 ? 'AUCUN DOUBLON' : 'DOUBLON DETECTE',
         banque: bank?.n || 0,
-        exemplesQuiz2: (second.questions || []).slice(0, 3).map((q) => q.question),
-        erreurs: [first.error, second.error].filter(Boolean),
-      };
-    } catch (e) {
-      payload = { done: true, error: e.message };
-    }
-    // Ménage : le joueur factice disparaît, les questions restent dans la banque.
-    try {
+        questions1: prev.questions1 || [],
+        questions2: (second.questions || []).map((q) => q.question),
+        erreur: second.error || null,
+      }), { expirationTtl: 3600 });
+      // Ménage : le joueur factice disparaît, les questions restent dans la banque.
       await c.env.DB.batch([
         c.env.DB.prepare('DELETE FROM question_seen WHERE user_id = ?').bind(uid),
         c.env.DB.prepare('DELETE FROM answer_seen WHERE user_id = ?').bind(uid),
         c.env.DB.prepare('DELETE FROM ai_usage WHERE user_id = ?').bind(uid),
         c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),
       ]);
-    } catch { /* sans importance */ }
-    await c.env.KV.put(`export:${id}`, JSON.stringify(payload), { expirationTtl: 3600 });
+    } catch (e) {
+      await c.env.KV.put(`export:${id}`, JSON.stringify({ done: true, error: e.message, phase }), { expirationTtl: 3600 });
+    }
   })());
 
-  return c.json({ started: true, id });
+  return c.json({ started: true, id, phase });
 });
 
 app.get('/api/bank/export/get', async (c) => {
