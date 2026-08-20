@@ -52,7 +52,7 @@ export default function MyQuizzes() {
         {(quizzes || []).map((q) => (
           <div key={q.id} className="card">
             <div className="flex items-start justify-between gap-2">
-              <h3 className="font-display text-xl font-extrabold">{q.emoji} {q.title}</h3>
+              <h3 className="font-display text-xl font-extrabold">{q.emoji} {q.title} {q.verified ? <span className="ml-1 rounded-full bg-minty/25 px-2 py-0.5 align-middle text-xs text-minty">✅ vérifié</span> : null}</h3>
               <button onClick={() => del(q.id)} className="text-white/40 hover:text-cherry" title="Supprimer">🗑</button>
             </div>
             <p className="mt-1 text-sm font-bold text-white/50">{q.questionCount} questions · {q.plays} partie(s) jouée(s)</p>

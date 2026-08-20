@@ -35,6 +35,9 @@ export default function Create() {
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
   const [hideAnswers, setHideAnswers] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [sources, setSources] = useState(null);
+  const [note, setNote] = useState('');
 
   useEffect(() => {
     api('/api/categories').then((d) => setCategories(d.categories)).catch(() => {});
@@ -53,9 +56,11 @@ export default function Create() {
     try {
       const d = await api('/api/ai/generate', {
         method: 'POST',
-        body: { topic, category, type, count, difficulty, language: 'fr' },
+        body: { topic, category, type, count, difficulty, language: 'fr', verified },
       });
       setQuestions(d.questions);
+      setSources(d.sources || null);
+      setNote(d.verifiedNote || '');
       refresh();
     } catch (e) {
       setError(e.code === 'quota' ? 'quota' : e.message);
@@ -67,7 +72,7 @@ export default function Create() {
     try {
       const d = await api('/api/quizzes', {
         method: 'POST',
-        body: { title: topic.slice(0, 80), category, difficulty, questions },
+        body: { title: topic.slice(0, 80), category, difficulty, questions, sources, verified: !!sources },
       });
       setSaved(d.quiz);
     } catch (e) { setError(e.message); }
@@ -150,15 +155,32 @@ export default function Create() {
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setVerified(!verified)}
+          className={`w-full rounded-2xl border-2 p-4 text-left transition-all ${verified ? 'border-minty bg-minty/15 tile-on' : 'border-white/15 bg-white/5 hover:border-white/35'}`}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{verified ? '✅' : '🎓'}</span>
+            <div className="flex-1">
+              <div className="font-display text-lg font-extrabold">Mode Révision {verified && <span className="text-minty">— activé</span>}</div>
+              <div className="text-sm font-semibold text-white/60">
+                Questions écrites à partir d'articles <b>Wikipédia</b> réels, et chaque réponse vérifiée dans la source. Idéal pour les devoirs.
+              </div>
+            </div>
+          </div>
+        </button>
+
         {error === 'quota' ? (
           <div className="rounded-2xl bg-sunny/15 p-4 text-center font-bold">
             ⚡ Tu as utilisé tes 3 générations gratuites du mois.{' '}
             <Link to="/pricing" className="text-grape-light underline">Passe en Premium</Link> pour générer sans limite !
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
+        {note && <p className="rounded-2xl bg-sunny/15 p-3 font-bold">ℹ️ {note}</p>}
 
         <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">
-          {loading ? '✨ L\'IA réfléchit…' : '✨ Générer le quiz'}
+          {loading ? (verified ? '📚 Lecture des sources…' : '✨ L\'IA réfléchit…') : (verified ? '🎓 Générer un quiz vérifié' : '✨ Générer le quiz')}
         </button>
       </div>
 
@@ -173,6 +195,18 @@ export default function Create() {
               <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
+          {sources && (
+            <div className="rounded-2xl border-2 border-minty/40 bg-minty/10 p-4">
+              <p className="font-display font-extrabold text-minty">✅ Quiz vérifié — sources encyclopédiques</p>
+              <ul className="mt-2 space-y-1">
+                {sources.map((s2) => (
+                  <li key={s2.url}>
+                    <a href={s2.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-white/70 underline hover:text-white">📖 {s2.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ol className="space-y-3">
             {questions.map((q, i) => (
               <li key={i} className="rounded-2xl bg-white/5 p-4">

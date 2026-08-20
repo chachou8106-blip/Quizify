@@ -1,6 +1,8 @@
 // AI quiz generation via Cloudflare Workers AI — robust JSON output, normalized format.
 // Normalized question: { question, options: [..], correct: <index>, explanation }
 
+import { wikiContext, answerSupported, normText, wiktionaryFilter } from './wiki';
+
 const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 export const CATEGORIES = {
@@ -71,6 +73,8 @@ ${typeRules}
 Ajoute pour chaque question une courte "explanation" (1 phrase, instructive ou drôle).
 Les questions doivent être variées, factuellement correctes, sans répétition, formulées de façon vivante.
 Pour toute notation mathématique, utilise UNIQUEMENT les symboles Unicode : ², ³, ×, ÷, √, π, ½ — jamais ^, **, ni notation LaTeX.
+Orthographe, accents et grammaire françaises impeccables.
+INTERDIT : proposer deux options qui pourraient être toutes les deux correctes (deux noms d'une même chose, deux graphies d'un même mot, une réponse contestée par les spécialistes). En cas de doute sur un fait, choisis une autre question.
 Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, au format :
 [{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]`;
 }
@@ -139,6 +143,16 @@ function cleanMath(s) {
   return t;
 }
 
+// Deux options qui ne diffèrent que par la typographie (H²O vs H₂O), les accents ou
+// la casse rendent la question inéquitable : on l'écarte.
+const DIGIT_MAP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+function optionKey(s) {
+  return String(s)
+    .replace(/[⁰-⁹₀-₉]/g, (d) => DIGIT_MAP[d] || d)
+    .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -156,6 +170,9 @@ function normalize(raw, type) {
       if (correct === null && typeof q.answer === 'boolean') correct = q.answer ? 0 : 1;
     }
     if (!options || options.length < 2 || correct === null || correct < 0 || correct >= options.length) continue;
+    // Anti-ambiguïté : aucune option ne doit être le doublon typographique d'une autre
+    if (new Set(options.map(optionKey)).size !== options.length) continue;
+    if (options.some((o) => !String(o).trim())) continue;
     out.push({
       question: cleanMath(q.question.trim()),
       options: options.map(cleanMath),
@@ -223,6 +240,71 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
   return out;
 }
 
+// ---------- MODE RÉVISION : questions ancrées dans Wikipédia et vérifiées ----------
+// L'IA ne puise plus dans sa mémoire : elle rédige à partir d'extraits encyclopédiques
+// réels, et chaque bonne réponse doit se retrouver dans la source, sinon la question saute.
+
+export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr' }) {
+  const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+  const sources = await wikiContext(env, topic);
+  if (!sources.length) {
+    return { questions: [], sources: [], reason: 'Aucun article Wikipédia trouvé pour ce sujet.' };
+  }
+  const context = sources.map((s, i) => `[Source ${i + 1} : ${s.title}]\n${s.extract}`).join('\n\n');
+  const ctxNorm = normText(context);
+  const diff = DIFF_LABEL[difficulty] || DIFF_LABEL.medium;
+
+  const prompt = `Tu rédiges un quiz SCOLAIRE en ${language === 'en' ? 'anglais' : 'français'} à partir de sources encyclopédiques vérifiées (Wikipédia).
+
+${context}
+
+RÈGLES ABSOLUES :
+1. Chaque question porte sur une information EXPLICITEMENT écrite dans les sources ci-dessus. N'utilise JAMAIS tes connaissances personnelles.
+2. La bonne réponse doit être un mot ou une expression qui APPARAÎT tel quel dans les sources.
+3. Les 3 mauvaises réponses sont clairement fausses mais plausibles et de même nature (même type de mot, même ordre de grandeur).
+4. JAMAIS deux options qui pourraient être toutes les deux correctes.
+5. Orthographe, accents et grammaire irréprochables. Formulation claire pour un élève.
+6. L'explication cite l'information exacte de la source.
+Difficulté : ${diff}.
+
+Génère EXACTEMENT ${n} questions à choix multiples (4 options, une seule correcte, position variée).
+Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b","c","d"],"correct":0,"explanation":"..."}]`;
+
+  let candidates = [];
+  for (let attempt = 0; attempt < 2 && candidates.length < n; attempt++) {
+    try {
+      const res = await env.AI.run(MODEL, {
+        messages: [
+          { role: 'system', content: 'Tu réponds uniquement en JSON valide. Tu ne rédiges que des questions dont la réponse figure dans les sources fournies.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4096,
+        temperature: attempt === 0 ? 0.5 : 0.3,
+      });
+      const batch = normalize(extractJSON(extractText(res)), 'multipleChoice');
+      for (const q of batch) {
+        if (candidates.some((c) => normText(c.question) === normText(q.question))) continue;
+        candidates.push(q);
+      }
+    } catch { /* on retentera */ }
+  }
+
+  // Filtre de vérification : la bonne réponse doit être soutenue par la source
+  const verified = [];
+  for (const q of candidates) {
+    const good = q.options[q.correct];
+    if (!answerSupported(good, ctxNorm)) continue;
+    verified.push({ ...q, verified: true });
+    if (verified.length >= n) break;
+  }
+
+  return {
+    questions: verified,
+    sources: sources.map((s) => ({ title: s.title, url: s.url })),
+    asked: n,
+  };
+}
+
 // ---------- Anagrammes : l'IA choisit les MOTS, le code fait tout le reste ----------
 // (mélange réel des lettres, mot garanti complet, distracteurs par permutation → zéro erreur possible)
 
@@ -252,23 +334,33 @@ function scrambled(word, avoid = new Set()) {
 
 export async function generateAnagramQuestions(env, { topic, count = 8, language = 'fr' }) {
   const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
-  let words = [];
+  let raw = [];
   try {
     const res = await env.AI.run(MODEL, {
       messages: [
         { role: 'system', content: 'Tu réponds uniquement en JSON valide, sans aucun texte hors du JSON.' },
-        { role: 'user', content: `Donne EXACTEMENT ${n * 2} mots ${language === 'en' ? 'anglais' : 'français'} d'UN SEUL MOT (noms communs ou noms propres, sans espace, sans trait d'union, sans apostrophe), de 5 à 12 lettres, en rapport avec le sujet : « ${topic || 'culture générale'} ». Mots COMPLETS uniquement, jamais tronqués. Réponds UNIQUEMENT avec un tableau JSON de chaînes, ex: ["CHOCOLAT","MONTAGNE"].` },
+        { role: 'user', content: `Donne EXACTEMENT ${n * 3} mots ${language === 'en' ? 'anglais' : 'français'} d'UN SEUL MOT (noms communs, sans espace, sans trait d'union, sans apostrophe), de 5 à 12 lettres, correctement orthographiés avec leurs accents, en rapport avec le sujet : « ${topic || 'culture générale'} ». Mots COMPLETS uniquement, jamais tronqués. Réponds UNIQUEMENT avec un tableau JSON de chaînes, ex: ["chocolat","montagne"].` },
       ],
       max_tokens: 1024,
       temperature: 0.6,
     });
-    const raw = extractJSON(extractText(res));
-    if (Array.isArray(raw)) {
-      words = raw.map((w) => stripAccents(String(w)).replace(/[^A-Z]/g, ''))
-        .filter((w) => w.length >= 5 && w.length <= 12);
+    const arr = extractJSON(extractText(res));
+    if (Array.isArray(arr)) {
+      raw = arr.map((w) => String(w).trim())
+        .filter((w) => /^[\p{L}]{5,12}$/u.test(w));
     }
   } catch { /* on utilisera la liste de secours */ }
-  words = [...new Set(words)];
+  raw = [...new Set(raw)];
+
+  // 📖 Vérification au Wiktionnaire : seuls les mots réellement attestés sont gardés.
+  let words = [];
+  if (raw.length) {
+    try {
+      const found = await wiktionaryFilter(raw);
+      words = raw.filter((w) => found.has(w)).map((w) => stripAccents(w));
+    } catch { /* dictionnaire injoignable */ }
+  }
+  words = [...new Set(words.filter((w) => w.length >= 5 && w.length <= 12))];
   if (words.length < n) words = [...words, ...FALLBACK_WORDS.filter((w) => !words.includes(w))];
 
   const out = [];

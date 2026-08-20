@@ -57,6 +57,16 @@ export default function Player({ mode }) {
         <p className="text-xl font-bold text-white/60">
           {pct >= 80 ? 'Incroyable, tu es imbattable !' : pct >= 50 ? 'Bien joué !' : 'Pas mal, retente ta chance !'}
         </p>
+        {quiz.sources?.length > 0 && (
+          <div className="card text-left">
+            <p className="font-display font-extrabold text-minty">📖 Sources vérifiées</p>
+            <ul className="mt-2 space-y-1">
+              {quiz.sources.map((s2) => (
+                <li key={s2.url}><a href={s2.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-white/70 underline hover:text-white">{s2.title}</a></li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex justify-center gap-3">
           <button onClick={() => { setIdx(0); setPicked(null); setScore(0); setDone(false); }} className="btn-primary">🔄 Rejouer</button>
           <Link to="/create" className="btn-ghost">✨ Créer mon quiz</Link>
@@ -68,7 +78,7 @@ export default function Player({ mode }) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div className="flex items-center justify-between font-display font-extrabold">
-        <span className="text-white/50">{quiz.emoji} {quiz.title}</span>
+        <span className="text-white/50">{quiz.emoji} {quiz.title} {quiz.verified ? <span className="ml-1 rounded-full bg-minty/25 px-2 py-0.5 text-xs text-minty">✅ vérifié</span> : null}</span>
         <span className="rounded-full bg-grape px-4 py-1 text-white">{idx + 1} / {total}</span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-white/15">

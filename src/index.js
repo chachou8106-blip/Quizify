@@ -2,7 +2,7 @@
 
 import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
-import { generateQuestions, generateMathQuestions, generateAnagramQuestions, CATEGORIES } from './ai';
+import { generateQuestions, generateMathQuestions, generateAnagramQuestions, generateVerifiedQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
 export { GameRoom } from './GameRoom';
 
@@ -117,7 +117,7 @@ app.get('/api/categories', (c) => c.json({ categories: CATEGORIES }));
 app.post('/api/ai/generate', auth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
-  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts } = body;
+  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts, verified = false } = body;
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
 
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
@@ -146,6 +146,8 @@ app.post('/api/ai/generate', auth, async (c) => {
   }
 
   let questions;
+  let sources = null;
+  let verifiedNote = null;
   try {
     const total = Math.min(Math.max(parseInt(count) || 5, 1), 40);
     const baseOpts = {
@@ -153,7 +155,21 @@ app.post('/api/ai/generate', auth, async (c) => {
       category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
-    if (type === 'anagram') {
+    if (verified && !personalFacts) {
+      // 🎓 Mode Révision : questions ancrées dans Wikipédia et vérifiées une à une.
+      const r = await generateVerifiedQuestions(c.env, { topic: baseOpts.topic, count: total, difficulty, language });
+      questions = r.questions;
+      sources = r.sources;
+      if (questions.length === 0) {
+        return c.json({
+          error: 'no_source',
+          message: r.reason || "Aucune source encyclopédique fiable trouvée pour ce sujet. Essaie un sujet plus précis (ex : « Louis XIV », « la photosynthèse »), ou désactive le Mode Révision.",
+        }, 422);
+      }
+      if (questions.length < total) {
+        verifiedNote = `${questions.length} question(s) sur ${total} ont pu être vérifiées dans les sources — les autres ont été écartées par précaution.`;
+      }
+    } else if (type === 'anagram') {
       // L'IA choisit les mots, le code mélange et vérifie → réponses garanties.
       questions = await generateAnagramQuestions(c.env, { topic: baseOpts.topic, count: total, language });
       if (questions.length === 0) throw new Error('impossible de construire les anagrammes');
@@ -188,7 +204,7 @@ app.post('/api/ai/generate', auth, async (c) => {
     ).bind(user.id, monthKey()).run();
   }
 
-  return c.json({ questions });
+  return c.json({ questions, sources, verifiedNote, verified: !!(verified && sources) });
 });
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
@@ -371,7 +387,7 @@ app.get('/api/music/blindtest', async (c) => {
 
 app.post('/api/quizzes', auth, async (c) => {
   const user = c.get('user');
-  const { title, category = 'culture', difficulty = 'medium', language = 'fr', questions } = await c.req.json().catch(() => ({}));
+  const { title, category = 'culture', difficulty = 'medium', language = 'fr', questions, sources = null, verified = false } = await c.req.json().catch(() => ({}));
   if (!title || !Array.isArray(questions) || questions.length === 0) {
     return c.json({ error: 'Titre et questions requis' }, 400);
   }
@@ -379,15 +395,16 @@ app.post('/api/quizzes', auth, async (c) => {
   const code = shareCode();
   const emoji = CATEGORIES[category]?.emoji || '🎯';
   await c.env.DB.prepare(
-    'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code) VALUES (?,?,?,?,?,?,?,?,?)'
-  ).bind(id, user.id, String(title).slice(0, 100), category, emoji, difficulty, language, JSON.stringify(questions), code).run();
-  return c.json({ quiz: { id, title, category, emoji, share_code: code, questions } }, 201);
+    'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code, sources, verified) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+  ).bind(id, user.id, String(title).slice(0, 100), category, emoji, difficulty, language, JSON.stringify(questions), code,
+    sources ? JSON.stringify(sources) : null, verified ? 1 : 0).run();
+  return c.json({ quiz: { id, title, category, emoji, share_code: code, questions, sources, verified: !!verified } }, 201);
 });
 
 app.get('/api/quizzes', auth, async (c) => {
   const user = c.get('user');
   const { results } = await c.env.DB.prepare(
-    'SELECT id, title, category, emoji, difficulty, share_code, plays, created_at, questions FROM quizzes WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
+    'SELECT id, title, category, emoji, difficulty, share_code, plays, created_at, questions, verified FROM quizzes WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
   ).bind(user.id).all();
   return c.json({
     quizzes: (results || []).map((q) => ({ ...q, questionCount: JSON.parse(q.questions).length, questions: undefined })),
@@ -399,7 +416,7 @@ app.get('/api/quizzes/:id', auth, async (c) => {
   const q = await c.env.DB.prepare('SELECT * FROM quizzes WHERE id = ? AND user_id = ?')
     .bind(c.req.param('id'), user.id).first();
   if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
-  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions) } });
+  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions), sources: q.sources ? JSON.parse(q.sources) : null } });
 });
 
 app.delete('/api/quizzes/:id', auth, async (c) => {
@@ -410,13 +427,13 @@ app.delete('/api/quizzes/:id', auth, async (c) => {
 
 // Public shared quiz (play by link) — answers included client-side for solo play.
 app.get('/api/shared/:code', async (c) => {
-  const q = await c.env.DB.prepare('SELECT id, title, category, emoji, difficulty, questions FROM quizzes WHERE share_code = ?')
+  const q = await c.env.DB.prepare('SELECT id, title, category, emoji, difficulty, questions, sources, verified FROM quizzes WHERE share_code = ?')
     .bind(c.req.param('code')).first();
   if (!q) return c.json({ error: 'Quiz introuvable' }, 404);
   c.executionCtx.waitUntil(
     c.env.DB.prepare('UPDATE quizzes SET plays = plays + 1 WHERE id = ?').bind(q.id).run()
   );
-  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions) } });
+  return c.json({ quiz: { ...q, questions: JSON.parse(q.questions), sources: q.sources ? JSON.parse(q.sources) : null } });
 });
 
 // ---------- live game rooms ----------
