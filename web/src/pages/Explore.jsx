@@ -17,7 +17,7 @@ export default function Explore() {
     <div className="space-y-8">
       <div className="text-center">
         <h1 className="font-display text-4xl font-extrabold">Explorer par <span className="neon-text">catégorie</span></h1>
-        <p className="mt-2 font-semibold text-white/60">Choisis un univers, l'IA prépare le quiz. Un tap et c'est parti.</p>
+        <p className="mt-2 font-semibold text-white/60">Choisis un univers, ton quiz se prépare. Un tap et c'est parti.</p>
       </div>
 
       {/* Expériences signature */}

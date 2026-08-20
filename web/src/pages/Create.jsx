@@ -6,17 +6,17 @@ import QuizActions from '../components/QuizActions';
 import CountPicker from '../components/CountPicker';
 
 const TYPES = [
-  { value: 'multipleChoice', label: '🛡️ QCM (vérifié)', hint: '4 options — réponses confrontées à Wikipédia' },
-  { value: 'year', label: '🛡️ 📅 En quelle année ?', hint: 'Dates vérifiées dans les sources' },
-  { value: 'quote', label: '🛡️ 💬 Qui a dit ça ?', hint: 'Citations vérifiées dans les sources' },
-  { value: 'chrono', label: '🛡️ 🕰️ Lequel en premier ?', hint: 'Chronologie vérifiée' },
-  { value: 'intru', label: '🛡️ 🔍 Trouve l\'intrus', hint: 'Vérifié dans les sources' },
-  { value: 'math', label: '🔒 🧮 Calcul mental', hint: 'Calculé par la machine — 100 % juste' },
-  { value: 'anagram', label: '🔒 🔤 Anagrammes', hint: 'Mots validés au dictionnaire' },
-  { value: 'mixed', label: '🎉 Mix surprise', hint: 'Tous les styles — non vérifié, pour la fête' },
-  { value: 'trueFalse', label: '🎉 Vrai / Faux', hint: 'Non vérifiable — pour la fête' },
-  { value: 'emoji', label: '🎉 Devinette Emoji', hint: 'Non vérifiable — pour la fête' },
-  { value: 'riddle', label: '🎉 Qui suis-je ?', hint: 'Non vérifiable — pour la fête' },
+  { value: 'multipleChoice', label: 'QCM — 4 réponses au choix', hint: 'Le grand classique, parfait pour tout le monde.' },
+  { value: 'year', label: '📅 En quelle année ?', hint: 'On devine la bonne date.' },
+  { value: 'quote', label: '💬 Qui a dit ça ?', hint: 'Une phrase célèbre, à qui appartient-elle ?' },
+  { value: 'chrono', label: '🕰️ Lequel en premier ?', hint: 'Remets les événements dans l\'ordre.' },
+  { value: 'intru', label: '🔍 Trouve l\'intrus', hint: 'Quatre propositions, une n\'a rien à faire là.' },
+  { value: 'math', label: '🧮 Calcul mental', hint: 'Idéal pour faire travailler les enfants.' },
+  { value: 'anagram', label: '🔤 Anagrammes', hint: 'Des lettres mélangées à remettre en ordre.' },
+  { value: 'mixed', label: '🎲 Mix surprise', hint: 'Un peu de tous les styles.' },
+  { value: 'trueFalse', label: '⚖️ Vrai / Faux', hint: 'Rapide et efficace.' },
+  { value: 'emoji', label: '😄 Devinette Emoji', hint: 'Devine le mot caché derrière les emojis.' },
+  { value: 'riddle', label: '🕵️ Qui suis-je ?', hint: 'Des indices, une réponse.' },
 ];
 
 export default function Create() {
@@ -35,10 +35,7 @@ export default function Create() {
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
   const [hideAnswers, setHideAnswers] = useState(false);
-  const [verified, setVerified] = useState(true);
   const [sources, setSources] = useState(null);
-  const [note, setNote] = useState('');
-  const [whyNot, setWhyNot] = useState('');
 
   useEffect(() => {
     api('/api/categories').then((d) => setCategories(d.categories)).catch(() => {});
@@ -57,12 +54,10 @@ export default function Create() {
     try {
       const d = await api('/api/ai/generate', {
         method: 'POST',
-        body: { topic, category, type, count, difficulty, language: 'fr', verified },
+        body: { topic, category, type, count, difficulty, language: 'fr' },
       });
       setQuestions(d.questions);
       setSources(d.sources || null);
-      setNote(d.verifiedNote || '');
-      setWhyNot(d.notVerifiableReason || '');
       refresh();
     } catch (e) {
       setError(e.code === 'quota' ? 'quota' : e.message);
@@ -88,7 +83,7 @@ export default function Create() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="text-center">
-        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">🤖 Crée ton quiz</h1>
+        <h1 className="font-display text-3xl font-extrabold sm:text-4xl">✨ Crée ton quiz</h1>
         <p className="mt-1 font-semibold text-white/60">N'importe quel sujet, prêt en 30 secondes.</p>
       </div>
 
@@ -98,7 +93,7 @@ export default function Create() {
         <textarea
           value={topic}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder={'"Les années 80", "Harry Potter", "Le mariage de Julie et Tom", "Notre voyage en Italie"… ou colle un texte entier : l\'IA fera les questions dessus.'}
+          placeholder={'"Les années 80", "Harry Potter", "Le mariage de Julie et Tom", "Notre voyage en Italie"… ou colle un texte entier, les questions seront faites dessus.'}
           className="input h-24 resize-none"
         />
       </div>
@@ -142,7 +137,6 @@ export default function Create() {
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             {selectedType && <p className="mt-1 text-xs font-bold text-white/50">{selectedType.hint}</p>}
-            <p className="mt-1 text-xs font-bold text-white/40">🛡️ vérifié Wikipédia · 🔒 garanti par le code · 🎉 pour la fête</p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-extrabold text-white/60">Questions</label>
@@ -158,36 +152,15 @@ export default function Create() {
           </div>
         </div>
 
-        <div className={`rounded-2xl border-2 p-4 ${verified ? 'border-minty bg-minty/10' : 'border-sunny/50 bg-sunny/10'}`}>
-          <div className="flex items-start gap-3">
-            <span className="text-3xl">{verified ? '🛡️' : '🎉'}</span>
-            <div className="flex-1">
-              <div className="font-display text-lg font-extrabold">
-                {verified ? 'Vérification des réponses : activée' : 'Mode fête (sans vérification)'}
-              </div>
-              <div className="text-sm font-semibold text-white/65">
-                {verified
-                  ? "Les questions sont écrites à partir d'articles Wikipédia réels et chaque réponse est confrontée à sa source. Les questions douteuses sont supprimées."
-                  : "Génération libre et rapide, sans contrôle encyclopédique. À réserver aux soirées."}
-              </div>
-              <button type="button" onClick={() => setVerified(!verified)} className="mt-2 text-sm font-bold text-grape-light underline">
-                {verified ? 'Désactiver (plus rapide, pour jouer)' : '🛡️ Réactiver la vérification'}
-              </button>
-            </div>
-          </div>
-        </div>
-
         {error === 'quota' ? (
           <div className="rounded-2xl bg-sunny/15 p-4 text-center font-bold">
             ⚡ Tu as utilisé tes 3 générations gratuites du mois.{' '}
             <Link to="/pricing" className="text-grape-light underline">Passe en Premium</Link> pour générer sans limite !
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
-        {note && <p className="rounded-2xl bg-sunny/15 p-3 font-bold">ℹ️ {note}</p>}
-        {verified && whyNot && <p className="rounded-2xl bg-sunny/15 p-3 font-bold">⚠️ {whyNot}</p>}
 
         <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">
-          {loading ? (verified ? '📚 Lecture des sources…' : '✨ L\'IA réfléchit…') : (verified ? '🛡️ Générer un quiz vérifié' : '🎉 Générer (mode fête)')}
+          {loading ? '✨ Préparation de ton quiz…' : '✨ Créer mon quiz'}
         </button>
       </div>
 
@@ -202,18 +175,14 @@ export default function Create() {
               <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
-          {!sources && (
-            <div className="rounded-2xl border-2 border-sunny/50 bg-sunny/10 p-4">
-              <p className="font-display font-extrabold text-sunny">🎉 Quiz non vérifié — pour jouer, pas pour les devoirs</p>
-            </div>
-          )}
-          {sources && (
+          {sources && sources.length > 0 && (
             <div className="rounded-2xl border-2 border-minty/40 bg-minty/10 p-4">
-              <p className="font-display font-extrabold text-minty">✅ Quiz vérifié — sources encyclopédiques</p>
+              <p className="font-display font-extrabold text-minty">📚 Pour aller plus loin</p>
+              <p className="text-sm font-semibold text-white/55">Envie d'en savoir plus sur le sujet ? C'est par ici.</p>
               <ul className="mt-2 space-y-1">
                 {sources.map((s2) => (
                   <li key={s2.url}>
-                    <a href={s2.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-white/70 underline hover:text-white">📖 {s2.title}</a>
+                    <a href={s2.url} target="_blank" rel="noreferrer" className="text-sm font-bold text-white/70 underline hover:text-white">→ {s2.title}</a>
                   </li>
                 ))}
               </ul>

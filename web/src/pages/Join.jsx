@@ -177,7 +177,7 @@ export default function Join() {
 
         {reward && (
           <div className="card border-4 border-sunny bg-sunny/15/40">
-            <p className="font-display text-xl font-extrabold">🎁 Champion·ne, tu gagnes {reward.credits} quiz IA gratuits !</p>
+            <p className="font-display text-xl font-extrabold">🎁 Champion·ne, tu gagnes {reward.credits} quiz gratuits !</p>
             <p className="mt-1 font-semibold text-white/60">Crée ton compte (30 s) pour les récupérer et organiser TA revanche.</p>
             <Link to={`/reward/${reward.code}`} className="btn-primary mt-3">🎁 Récupérer mon cadeau</Link>
           </div>

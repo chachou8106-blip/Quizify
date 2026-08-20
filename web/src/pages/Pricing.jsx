@@ -32,12 +32,12 @@ export default function Pricing() {
   const plans = [
     {
       name: 'Gratuit', price: '0 €', emoji: '🌱', border: 'border-white/15',
-      features: ['3 quiz IA par mois', 'Parties live jusqu\'à 10 joueurs', 'Partage par lien illimité', 'Quiz jouables en solo sans limite'],
+      features: ['3 quiz par mois', 'Parties live jusqu\'à 10 joueurs', 'Partage par lien illimité', 'Quiz jouables en solo sans limite'],
       cta: user ? null : { label: 'Créer mon compte', to: '/signup' },
     },
     {
       name: 'Premium', price: '4,99 €/mois', emoji: '👑', border: 'border-grape', badge: 'Le plus populaire',
-      features: ['Quiz IA illimités', 'Parties live jusqu\'à 100 joueurs', 'Toutes les catégories & difficultés', 'Support prioritaire'],
+      features: ['Quiz illimités', 'Parties live jusqu\'à 100 joueurs', 'Toutes les catégories & difficultés', 'Support prioritaire'],
       cta: { label: 'S\'abonner via Gumroad', href: links.premium },
     },
     {

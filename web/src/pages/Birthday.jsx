@@ -64,7 +64,7 @@ export default function Birthday() {
       <div className="text-center">
         <div className="animate-wiggle text-6xl">🎂</div>
         <h1 className="font-display text-3xl font-extrabold sm:text-4xl">Le quiz anniversaire</h1>
-        <p className="mt-2 font-semibold text-white/60">Qui connaît le mieux la star du jour ? Raconte des anecdotes, l'IA écrit le quiz — et invente des mauvaises réponses très plausibles 😈</p>
+        <p className="mt-2 font-semibold text-white/60">Qui connaît le mieux la star du jour ? Raconte quelques anecdotes, le quiz s'écrit tout seul — avec des mauvaises réponses très plausibles 😈</p>
       </div>
 
       <div className="card space-y-5">

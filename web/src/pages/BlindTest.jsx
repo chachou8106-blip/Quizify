@@ -140,7 +140,7 @@ export default function BlindTest() {
         <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">
           {loading ? '🎶 Recherche des morceaux…' : '🎶 Créer le blind test'}
         </button>
-        <p className="text-center text-sm font-semibold text-white/50">Gratuit et illimité — ne compte pas dans ton quota IA ✨</p>
+        <p className="text-center text-sm font-semibold text-white/50">Gratuit et illimité ✨</p>
       </div>
 
       {questions && (

@@ -21,7 +21,7 @@ export default function Reward() {
     api('/api/rewards/claim', { method: 'POST', body: { code } })
       .then((d) => {
         setStatus('done');
-        setMsg(`${d.credits} quiz IA ajoutés à ton compte !`);
+        setMsg(`${d.credits} quiz ajoutés à ton compte !`);
         confetti({ particleCount: 180, spread: 90, origin: { y: 0.6 } });
         refresh();
       })

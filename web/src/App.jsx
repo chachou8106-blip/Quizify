@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Nav from './components/Nav';
 import Footer from './components/Footer';
+import FloatingDecor from './components/FloatingDecor';
 import Home from './pages/Home';
 import Create from './pages/Create';
 import Birthday from './pages/Birthday';
@@ -20,8 +21,9 @@ export default function App() {
   const location = useLocation();
   return (
     <div className="min-h-screen">
+      <FloatingDecor />
       <Nav />
-      <main key={location.pathname} className="page-enter mx-auto max-w-5xl px-4 pb-24 pt-24">
+      <main key={location.pathname} className="page-enter relative z-10 mx-auto max-w-5xl px-4 pb-24 pt-24">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/create" element={<Create />} />

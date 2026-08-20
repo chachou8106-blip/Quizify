@@ -52,7 +52,7 @@ const TYPE_RULES = {
 
 function buildTypeRules(type) { return TYPE_RULES[type] || TYPE_RULES.multipleChoice; }
 
-function buildPrompt({ topic, category, type, count, difficulty, language, personalFacts }) {
+function buildPrompt({ topic, category, type, count, difficulty, language, personalFacts, context }) {
   const lang = language === 'en' ? 'English' : 'français';
   const cat = CATEGORIES[category]?.name || 'Culture Générale';
   const diff = DIFF_LABEL[difficulty] || DIFF_LABEL.medium;
@@ -70,8 +70,13 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
 
   const typeRules = buildTypeRules(type);
 
+  // Documentation de référence (quand elle existe) : les faits doivent en provenir.
+  const refBlock = context
+    ? `\nDOCUMENTATION DE RÉFÉRENCE (fais reposer tous les faits sur ces extraits, n'invente aucun fait qui les contredise) :\n${context}\n`
+    : '';
+
   return `Tu es un créateur de quiz expert et amusant. Génère EXACTEMENT ${count} questions de quiz en ${lang}.
-${subject}
+${subject}${refBlock}
 Difficulté : ${diff}
 ${typeRules}
 Ajoute pour chaque question une courte "explanation" (1 phrase, instructive ou drôle).
@@ -249,7 +254,7 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
 // réels, et chaque bonne réponse doit se retrouver dans la source, sinon la question saute.
 
 export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice' }) {
-  const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+  const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
   const sources = await wikiContext(env, topic);
   if (!sources.length) {
     return { questions: [], sources: [], reason: 'Aucun article Wikipédia trouvé pour ce sujet.' };
@@ -257,6 +262,11 @@ export async function generateVerifiedQuestions(env, { topic, count = 8, difficu
   const context = sources.map((s, i) => `[Source ${i + 1} : ${s.title}]\n${s.extract}`).join('\n\n');
   const ctxNorm = normText(context);
   const diff = DIFF_LABEL[difficulty] || DIFF_LABEL.medium;
+
+  // On demande volontairement PLUS de questions que nécessaire : le filtre de vérification
+  // en écarte une partie, et l'utilisateur doit malgré tout recevoir le nombre demandé.
+  const perBatch = Math.min(Math.ceil(n * 1.7) + 2, 18);
+  const target = Math.ceil(n * 1.7) + 2;
 
   const prompt = `Tu rédiges un quiz SCOLAIRE en ${language === 'en' ? 'anglais' : 'français'} à partir de sources encyclopédiques vérifiées (Wikipédia).
 
@@ -274,19 +284,20 @@ Difficulté : ${diff}.
 
 STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
 
-Génère EXACTEMENT ${n} questions (4 options, une seule correcte, position variée).
+Génère EXACTEMENT ${perBatch} questions (4 options, une seule correcte, position variée).
 Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b","c","d"],"correct":0,"explanation":"..."}]`;
 
   let candidates = [];
-  for (let attempt = 0; attempt < 2 && candidates.length < n; attempt++) {
+  for (let attempt = 0; attempt < 4 && candidates.length < target; attempt++) {
     try {
+      const extra = attempt === 0 ? '' : `\n\nATTENTION : porte ces questions sur des informations DIFFÉRENTES de celles-ci, déjà utilisées : ${candidates.slice(-12).map((c) => c.question).join(' | ')}`;
       const res = await env.AI.run(MODEL, {
         messages: [
           { role: 'system', content: 'Tu réponds uniquement en JSON valide. Tu ne rédiges que des questions dont la réponse figure dans les sources fournies.' },
-          { role: 'user', content: prompt },
+          { role: 'user', content: prompt + extra },
         ],
         max_tokens: 4096,
-        temperature: attempt === 0 ? 0.5 : 0.3,
+        temperature: attempt === 0 ? 0.5 : 0.6,
       });
       const batch = normalize(extractJSON(extractText(res)), 'multipleChoice');
       for (const q of batch) {
@@ -316,12 +327,13 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
     });
     if (ambiguous) continue;
     verified.push({ ...q, verified: true });
-    if (verified.length >= n) break;
+    // Marge de sécurité : le contrôle adverse ci-dessous en écartera encore quelques-unes.
+    if (verified.length >= n + 4) break;
   }
 
   // Passe adverse : on demande explicitement quelles questions ont PLUSIEURS réponses
   // acceptables (ex. « quelle femme fut guillotinée ? » avec 3 femmes guillotinées en options).
-  const clean = await dropAmbiguous(env, verified, context);
+  const clean = (await dropAmbiguous(env, verified, context)).slice(0, n);
 
   return {
     questions: clean,

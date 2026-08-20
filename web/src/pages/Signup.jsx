@@ -27,7 +27,7 @@ export default function Signup() {
       <div className="text-center">
         <div className="text-5xl">🎉</div>
         <h1 className="font-display text-3xl font-extrabold">Crée ton compte gratuit</h1>
-        <p className="mt-1 font-semibold text-white/60">3 quiz IA offerts chaque mois, sans carte bancaire.</p>
+        <p className="mt-1 font-semibold text-white/60">3 quiz offerts chaque mois, sans carte bancaire.</p>
       </div>
       <form onSubmit={submit} className="card space-y-4">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ton prénom" className="input" required />

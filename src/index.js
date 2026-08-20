@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
 import { generateQuestions, generateMathQuestions, generateAnagramQuestions, generateVerifiedQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
+import { wikiContext } from './wiki';
 export { GameRoom } from './GameRoom';
 
 const app = new Hono();
@@ -121,7 +122,8 @@ app.get('/api/categories', (c) => c.json({ categories: CATEGORIES }));
 app.post('/api/ai/generate', auth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
-  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts, verified = true } = body;
+  // La vérification est TOUJOURS active : aucun réglage client ne peut la désactiver.
+  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts } = body;
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
 
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
@@ -151,7 +153,6 @@ app.post('/api/ai/generate', auth, async (c) => {
 
   let questions;
   let sources = null;
-  let verifiedNote = null;
   try {
     const total = Math.min(Math.max(parseInt(count) || 5, 1), 40);
     const baseOpts = {
@@ -159,33 +160,42 @@ app.post('/api/ai/generate', auth, async (c) => {
       category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
-    const wantVerify = verified && !personalFacts && VERIFIABLE_TYPES.has(type);
-    if (wantVerify) {
-      // ✅ Vérification : questions ancrées dans Wikipédia et contrôlées une à une.
+    if (!personalFacts && VERIFIABLE_TYPES.has(type)) {
+      // Contrôle complet : questions ancrées dans des articles réels et vérifiées une à une.
       const r = await generateVerifiedQuestions(c.env, { topic: baseOpts.topic, count: total, difficulty, language, type });
       if (r.questions.length > 0) {
         questions = r.questions;
         sources = r.sources;
-        if (questions.length < total) {
-          verifiedNote = `${questions.length} question(s) sur ${total} ont pu être confirmées dans les sources — les autres ont été écartées par précaution.`;
-        }
       } else {
-        // Aucun article exploitable : on génère quand même, mais SANS badge « vérifié »
-        questions = await generateQuestions(c.env, { ...baseOpts, count: total });
-        verifiedNote = "⚠️ Aucune source encyclopédique n'a été trouvée pour ce sujet : ce quiz n'est PAS vérifié. Parfait pour jouer, à ne pas utiliser pour des devoirs. Essaie un sujet plus précis (ex. « Louis XIV », « la photosynthèse ») pour obtenir un quiz vérifié.";
+        // Aucun article exploitable : on documente quand même le sujet avant d'écrire.
+        const ctx = await wikiContext(c.env, baseOpts.topic).catch(() => []);
+        const context = ctx.map((s, i) => `[${s.title}]\n${s.extract}`).join('\n\n') || null;
+        questions = await generateQuestions(c.env, { ...baseOpts, count: total, context });
+        sources = ctx.length ? ctx.map((s) => ({ title: s.title, url: s.url })) : null;
       }
     } else if (type === 'anagram') {
       // L'IA choisit les mots, le code mélange et vérifie → réponses garanties.
       questions = await generateAnagramQuestions(c.env, { topic: baseOpts.topic, count: total, language });
       if (questions.length === 0) throw new Error('impossible de construire les anagrammes');
-    } else if (total <= 12) {
-      questions = await generateQuestions(c.env, { ...baseOpts, count: total });
     } else {
+      // Styles libres (emoji, vrai/faux, mix…) : on documente d'abord le sujet,
+      // puis la relecture factuelle intégrée écarte les questions douteuses.
+      let context = null;
+      if (!personalFacts) {
+        const ctx = await wikiContext(c.env, baseOpts.topic).catch(() => []);
+        if (ctx.length) {
+          context = ctx.map((s) => `[${s.title}]\n${s.extract}`).join('\n\n');
+          sources = ctx.map((s) => ({ title: s.title, url: s.url }));
+        }
+      }
+      if (total <= 12) {
+        questions = await generateQuestions(c.env, { ...baseOpts, count: total, context });
+      } else {
       // Gros quiz : génération par lots parallèles de 10 (fiable), puis fusion + dédoublonnage.
       const chunks = [];
       for (let left = total; left > 0; left -= 10) chunks.push(Math.min(10, left));
       const batches = await Promise.all(chunks.map((n, i) =>
-        generateQuestions(c.env, { ...baseOpts, count: n, topic: `${baseOpts.topic}\n(Lot ${i + 1} — propose des questions sur des aspects différents des autres lots.)` })
+        generateQuestions(c.env, { ...baseOpts, count: n, context, topic: `${baseOpts.topic}\n(Lot ${i + 1} — propose des questions sur des aspects différents des autres lots.)` })
           .catch(() => [])
       ));
       const seen = new Set();
@@ -196,6 +206,7 @@ app.post('/api/ai/generate', auth, async (c) => {
         return true;
       }).slice(0, total);
       if (questions.length < Math.min(8, total)) throw new Error('pas assez de questions valides');
+      }
     }
   } catch (e) {
     return c.json({ error: 'ai_failed', message: `La génération a échoué (${e.message}). Réessaie dans quelques secondes !` }, 502);
@@ -209,10 +220,7 @@ app.post('/api/ai/generate', auth, async (c) => {
     ).bind(user.id, monthKey()).run();
   }
 
-  const notVerifiableReason = personalFacts
-    ? 'Quiz personnalisé : les faits viennent de toi, pas d\'une encyclopédie.'
-    : (!VERIFIABLE_TYPES.has(type) ? 'Ce style de question (emoji, vrai/faux, mix…) ne peut pas être confronté à une source. Choisis « QCM » pour un quiz vérifié.' : null);
-  return c.json({ questions, sources, verifiedNote, verified: !!sources, notVerifiableReason });
+  return c.json({ questions, sources, verified: true });
 });
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------

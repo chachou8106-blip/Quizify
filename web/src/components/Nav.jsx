@@ -25,7 +25,7 @@ export default function Nav() {
             <>
               <Link to="/quizzes" className="font-bold text-white/75 hover:text-grape-light">Mes quiz</Link>
               <span className="rounded-full bg-grape/10 px-3 py-1 text-sm font-bold text-grape-light">
-                {user.plan === 'premium' ? '👑 Premium' : user.plan === 'event' ? '🎉 Pass Événement' : `⚡ ${Math.max(0, aiQuota - aiUsed) + aiBonus} IA`}
+                {user.plan === 'premium' ? '👑 Premium' : user.plan === 'event' ? '🎉 Pass Événement' : `⚡ ${Math.max(0, aiQuota - aiUsed) + aiBonus} quiz`}
               </span>
               <button onClick={() => { logout(); navigate('/'); }} className="font-bold text-white/50 hover:text-cherry">Déconnexion</button>
             </>
