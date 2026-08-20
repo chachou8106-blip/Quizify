@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<style>
+  body { margin:0; background:#0E0A26; color:#fff; font-family:system-ui,sans-serif; padding:28px; }
+  h2 { font-size:15px; letter-spacing:.08em; text-transform:uppercase; color:#A78BFA; margin:30px 0 12px; }
+  .row { display:flex; align-items:center; gap:30px; flex-wrap:wrap; }
+  .cell { text-align:center; }
+  .cell em { display:block; font-size:10px; color:#8b85a8; margin-top:6px; font-style:normal; }
+  .light { background:#FFF9F0; padding:12px; border-radius:14px; }
+</style></head><body>
+<div id="out"></div>
+<script>
+// Chaque piste est une fonction qui rend le SVG à la taille voulue :
+// dupliquer le balisage évite le bug de <use> qui recadrait les petites tailles.
+const A1 = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64">
+  <defs><linearGradient id="a1${s}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs>
+  <path d="M32 5C16.5 5 4 15.2 4 27.8c0 7.3 4.2 13.8 10.8 18v9.6c0 1.5 1.7 2.3 2.9 1.4l9.6-7.4c1.5.2 3.1.3 4.7.3 15.5 0 28-10.2 28-22.8S47.5 5 32 5z" fill="url(#a1${s})"/>
+  <path d="M25.6 24.4c0-3.6 2.9-6.5 6.6-6.5s6.6 2.7 6.6 6.2c0 2.7-1.5 4.2-3.7 5.7-1.9 1.3-2.6 2.2-2.6 4.1v.9" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round"/>
+  <circle cx="32.1" cy="42.6" r="2.9" fill="#fff"/></svg>`;
+
+// A2 : la bulle penche légèrement et gagne une étincelle dorée + un éclat interne.
+const A2 = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="a2${s}" x1="0.05" y1="0" x2="0.95" y2="1">
+      <stop offset="0" stop-color="#A78BFA"/><stop offset="0.45" stop-color="#8B5CF6"/><stop offset="1" stop-color="#EC4899"/></linearGradient>
+    <radialGradient id="sh${s}" cx="0.3" cy="0.22" r="0.6">
+      <stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path d="M31 6C16 6 4 15.9 4 28.1c0 7 4 13.4 10.3 17.4l-1.6 9.9c-.25 1.6 1.5 2.75 2.85 1.85l9.9-6.6c1.8.3 3.65.45 5.55.45 15 0 27-9.9 27-22.1S46 6 31 6z" fill="url(#a2${s})"/>
+  <path d="M31 6C16 6 4 15.9 4 28.1c0 7 4 13.4 10.3 17.4l-1.6 9.9c-.25 1.6 1.5 2.75 2.85 1.85l9.9-6.6c1.8.3 3.65.45 5.55.45 15 0 27-9.9 27-22.1S46 6 31 6z" fill="url(#sh${s})"/>
+  <path d="M24.8 23.9c0-3.7 3-6.7 6.8-6.7s6.8 2.8 6.8 6.4c0 2.8-1.6 4.3-3.8 5.9-2 1.4-2.7 2.3-2.7 4.2v1" fill="none" stroke="#fff" stroke-width="4.8" stroke-linecap="round"/>
+  <circle cx="31.2" cy="42.4" r="3" fill="#fff"/>
+  <path d="M52 7l1.85 3.75 4.15.6-3 2.9.7 4.1L52 16.4l-3.7 1.95.7-4.1-3-2.9 4.15-.6z" fill="#FBBF24"/></svg>`;
+
+// A3 : version pastille d'application, pour la tuile d'accueil et le favicon.
+const A3 = (s) => `<svg width="${s}" height="${s}" viewBox="0 0 64 64">
+  <defs><linearGradient id="a3${s}" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#A78BFA"/><stop offset="0.5" stop-color="#8B5CF6"/><stop offset="1" stop-color="#EC4899"/></linearGradient>
+    <linearGradient id="q3${s}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7C3AED"/><stop offset="1" stop-color="#DB2777"/></linearGradient></defs>
+  <rect width="64" height="64" rx="15" fill="url(#a3${s})"/>
+  <path d="M32 13c-10.5 0-19 6.9-19 15.4 0 4.9 2.8 9.3 7.2 12.1l-1.1 6.9c-.2 1.2 1.1 2 2.1 1.3l6.9-4.6c1.3.2 2.6.3 3.9.3 10.5 0 19-6.9 19-15.4S42.5 13 32 13z" fill="#fff"/>
+  <path d="M27.6 26.2c0-2.6 2.1-4.6 4.7-4.6s4.7 1.9 4.7 4.4c0 1.9-1.1 3-2.6 4.1-1.4 1-1.9 1.6-1.9 2.9v.7" fill="none" stroke="url(#q3${s})" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="32.1" cy="38.2" r="2.1" fill="url(#q3${s})"/></svg>`;
+
+const pistes = [['A1 — bulle simple', A1], ['A2 — bulle inclinée + étincelle', A2], ['A3 — pastille application', A3]];
+let html = '';
+for (const [nom, f] of pistes) {
+  html += `<h2>${nom}</h2><div class="row">`;
+  for (const s of [128, 64, 40, 32, 20, 16]) html += `<div class="cell">${f(s)}<em>${s} px</em></div>`;
+  html += `<div class="cell light">${f(44)}<em style="color:#666">sur clair</em></div>`;
+  html += `<div class="cell" style="display:flex;align-items:center;gap:9px">${f(36)}
+    <span style="font-size:26px;font-weight:800;background:linear-gradient(90deg,#8B5CF6,#EC4899);-webkit-background-clip:text;color:transparent">Quizzalo</span></div>`;
+  html += '</div>';
+}
+document.getElementById('out').innerHTML = html;
+</script></body></html>
