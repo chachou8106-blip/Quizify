@@ -487,9 +487,16 @@ async function deezerJson(path) {
   return res.json().catch(() => null);
 }
 
+// Quizzalo se joue en famille, enfants compris : on écarte les morceaux
+// signalés comme explicites par le catalogue, ainsi que les titres grossiers.
+// Un blind test qui affiche une insulte en gros sur la télé du salon, c'est
+// exactement ce qu'on ne veut pas le soir d'un anniversaire.
+const GROS_MOTS = /\b(fuck|f\*ck|shit|bitch|nigga|niggas|pussy|cunt|salope|pute|enculé|encule|nique|niquer|connard|bite|couilles)\b/i;
+
 function mapDeezerTracks(list) {
   return (list || [])
     .filter((t) => t.preview && t.title && t.artist?.name)
+    .filter((t) => !t.explicit_lyrics && !GROS_MOTS.test(t.title) && !GROS_MOTS.test(t.artist?.name || ''))
     .map((t) => ({
       title: cleanTitle(t.title),
       artist: t.artist.name,
@@ -526,11 +533,27 @@ async function fetchChartTracks(limit = 60) {
 // Thème d'ambiance = morceaux des playlists les PLUS POPULAIRES correspondant au thème.
 async function fetchThemeTracks(term, limit = 60) {
   if (/\bhits? du moment\b|\btop 50\b|\btendance/.test(normTxt(term))) return fetchChartTracks(limit);
-  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent(term)}&limit=10`);
-  const playlists = (search?.data || [])
-    .filter((p) => (p.nb_tracks || 0) >= 15)
+  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent(term)}&limit=25`);
+  let candidates = (search?.data || []).filter((p) => (p.nb_tracks || 0) >= 15);
+
+  // Les décennies sont le point faible : une recherche « Années 90 » ramène des
+  // playlists fourre-tout où traînent du Bowie de 1977 et de l'Amy Winehouse de
+  // 2006. Quand une décennie est demandée, on ne garde que les playlists dont le
+  // TITRE la mentionne — c'est le signal le plus fiable dont on dispose.
+  const dec = normTxt(term).match(/\b(19)?([5-9]0)\b|\b(20)([0-2]0)\b/);
+  if (dec) {
+    const court = dec[2] || dec[4];
+    const long = dec[2] ? `19${dec[2]}` : `20${dec[4]}`;
+    const cible = candidates.filter((p) => {
+      const t = normTxt(p.title || '');
+      return t.includes(long) || new RegExp(`\\b${court}(s|'s)?\\b`).test(t);
+    });
+    if (cible.length) candidates = cible;
+  }
+
+  const playlists = candidates
     .sort((a, b) => (b.fans || b.nb_tracks || 0) - (a.fans || a.nb_tracks || 0))
-    .slice(0, 2);
+    .slice(0, 3);
   const out = [];
   for (const p of playlists) {
     const tr = await deezerJson(`/playlist/${p.id}/tracks?limit=${Math.min(limit, 100)}`);
