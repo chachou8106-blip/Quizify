@@ -1020,6 +1020,33 @@ app.get('/api/prepare', async (c) => {
       if (!u) throw new Error(`aucun compte pour ${email}`);
       const token = await signJWT({ id: u.id, email: u.email, name: u.name }, await secret(c));
 
+      // Blind test : les morceaux viennent du catalogue musical, pas du moteur
+      // de rédaction. Aucune unité de calcul n'est consommée.
+      if (type === 'blindtest') {
+        const bt = await app.fetch(new Request(
+          `https://prepare/api/music/blindtest?themes=${encodeURIComponent(topic)}&count=${count}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        ), c.env, c.executionCtx);
+        const musique = await bt.json();
+        if (!musique.questions?.length) throw new Error(musique.error || 'aucun morceau trouvé');
+        const sauve = await app.fetch(new Request('https://prepare/api/quizzes', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: titreVoulu || `🎧 Blind test : ${topic}`,
+            category: 'blindtest', difficulty, questions: musique.questions,
+          }),
+        }), c.env, c.executionCtx);
+        const q = (await sauve.json()).quiz;
+        if (!q) throw new Error('enregistrement du blind test impossible');
+        await c.env.KV.put(`export:${id}`, JSON.stringify({
+          done: true, titre: q.title, lien: `/s/${q.share_code}`,
+          questions: q.questions.length, demandees: count, type,
+          apercu: q.questions.map((x) => ({ q: x.options[x.correct], r: '🎵', opts: x.options.length })),
+        }), { expirationTtl: 21600 });
+        return;
+      }
+
       const gen = await app.fetch(new Request('https://prepare/api/ai/generate?force=1', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
