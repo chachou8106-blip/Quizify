@@ -64,7 +64,13 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
     // Sujet libre : aucune contrainte de catégorie, l'IA suit uniquement le sujet donné.
     subject = `Sujet du quiz (sujet libre, sans catégorie imposée) : ${topic}`;
   } else {
-    subject = `Sujet du quiz : ${topic}\nCatégorie : ${cat}`;
+    // Le SUJET commande, la catégorie n'est qu'une étiquette de rangement.
+    // Sans cette hiérarchie, le modèle hésitait entre les deux et partait parfois
+    // complètement ailleurs (sujet « Géographie » + rayon « Culture générale »
+    // produisait des questions sur la cuisine italienne).
+    subject = `SUJET DU QUIZ — c'est la seule consigne qui compte : ${topic}
+Les ${count} questions doivent TOUTES porter sur ce sujet, sans exception.
+(Ce quiz sera rangé dans le rayon « ${cat} », mais ce rangement ne doit RIEN changer aux questions : ne dérive jamais vers ce thème si le sujet demandé est différent.)`;
   }
 
 
@@ -530,6 +536,46 @@ Réponds UNIQUEMENT par un tableau JSON d'entiers, un par question, dans l'ordre
   }
 }
 
+// ---------- Garde-fou « hors sujet » ----------
+// Rien ne vérifiait que les questions parlaient bien du sujet demandé. Résultat :
+// des quiz intitulés « Géographie » remplis de questions de cuisine. On relit
+// donc le lot en se posant une seule question : est-ce que ça parle du sujet ?
+export async function dropOffTopic(env, questions, topic) {
+  const sujet = String(topic || '').trim();
+  if (!sujet || questions.length === 0) return questions;
+  const liste = questions.map((q, i) => `${i}. ${q.question}`).join('\n');
+  const prompt = `Sujet annoncé du quiz : « ${sujet} »
+
+Voici les questions :
+${liste}
+
+Indique le NUMÉRO de chaque question qui ne porte PAS sur ce sujet.
+Une question porte sur le sujet si elle en traite un aspect, même secondaire.
+Sois indulgent sur les aspects connexes, mais impitoyable avec ce qui n'a
+manifestement aucun rapport (une question de cuisine dans un quiz de géographie).
+Réponds UNIQUEMENT par un tableau JSON de numéros. Si tout est bon : [].`;
+  try {
+    const res = await env.AI.run(MODEL, {
+      messages: [
+        { role: 'system', content: 'Tu réponds uniquement par un tableau JSON de nombres.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 256,
+      temperature: 0,
+    });
+    const bad = extractJSON(extractText(res));
+    if (!Array.isArray(bad)) return questions;
+    const drop = new Set(bad.filter(Number.isInteger));
+    const kept = questions.filter((_, i) => !drop.has(i));
+    // Si TOUT est jugé hors sujet, c'est la génération entière qui a dérivé :
+    // on le signale à l'appelant plutôt que de rendre un quiz vide.
+    if (kept.length === 0) return [];
+    return kept;
+  } catch {
+    return questions;
+  }
+}
+
 export async function generateQuestions(env, opts) {
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
   // On en demande quelques-unes de plus : les contrôles en écartent toujours une partie,
@@ -566,6 +612,12 @@ export async function generateQuestions(env, opts) {
         } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
         // Contre-épreuve à l'aveugle : dernier filet avant affichage.
         if (Date.now() - started < 45000) questions = await crossCheck(env, questions);
+        // Le quiz parle-t-il bien du sujet demandé ?
+        if (opts.topic && Date.now() - started < 50000) {
+          const surSujet = await dropOffTopic(env, questions, opts.topic);
+          if (surSujet.length === 0) throw new Error('hors_sujet');
+          questions = surSujet;
+        }
       }
       return questions.slice(0, count);
     } catch (e) {

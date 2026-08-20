@@ -14,6 +14,7 @@ export async function api(path, { method = 'GET', body } = {}) {
     const err = new Error(data?.message || data?.error || `Erreur ${res.status}`);
     err.status = res.status;
     err.code = data?.error;
+    err.data = data;          // charge utile complete (ex. suggestion d'orthographe)
     throw err;
   }
   return data;

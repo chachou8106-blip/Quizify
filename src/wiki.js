@@ -60,6 +60,28 @@ export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000, d
   return out;
 }
 
+// --- Le sujet tapé est-il une faute de frappe ? ---
+// Wikipédia embarque un correcteur orthographique : quand une recherche ne
+// donne rien, il propose l'orthographe attendue. C'est exactement ce qu'il
+// faut pour rattraper un « Grogrzphie » tapé à la place de « Géographie ».
+// Renvoie la correction proposée, ou null si le sujet est déjà correct.
+export async function spellSuggestion(topic) {
+  const t = String(topic || '').trim();
+  if (t.length < 3 || t.length > 60) return null;
+  const data = await wapi('fr.wikipedia.org', {
+    action: 'query', list: 'search', srsearch: t,
+    srlimit: '1', srnamespace: '0', srinfo: 'suggestion', srprop: '',
+  });
+  const info = data?.query?.searchinfo;
+  const found = (data?.query?.search || []).length;
+  const suggestion = info?.suggestion || null;
+  // On ne propose une correction que si la recherche d'origine ne donne rien
+  // ET que la correction est réellement différente du texte tapé.
+  if (found > 0 || !suggestion) return null;
+  if (normText(suggestion) === normText(t)) return null;
+  return suggestion;
+}
+
 // Une réponse est « soutenue » par la source si elle y figure (littéralement,
 // ou par tous ses mots significatifs).
 export function answerSupported(answer, ctxNorm) {

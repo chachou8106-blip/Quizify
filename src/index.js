@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth, verifyJWT } from './auth';
 import { generateQuestions, generateMathQuestions, generateAnagramQuestions, generateVerifiedQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
-import { wikiContext } from './wiki';
+import { wikiContext, spellSuggestion } from './wiki';
 import {
   fingerprintAll, drawUnseen, knownFingerprints, storeQuestions, markSeen,
   seenAnswerKeys, unseenTracks, markTracksSeen,
@@ -173,12 +173,38 @@ async function seenByUser(env, userId, fps) {
   }
 }
 
+// Le titre doit décrire ce qu'il y a DANS le quiz, pas recopier ce qui a été tapé.
+// Quand le sujet a été retrouvé dans une source, on prend le nom de l'article :
+// c'est lui qui correspond réellement aux questions produites.
+function titreDuQuiz(topic, sources) {
+  const tape = String(topic || '').trim().replace(/\s+/g, ' ');
+  const source = sources?.[0]?.title;
+  if (source) {
+    // On ne remplace que si le titre de l'article couvre bien le sujet tapé
+    // (évite de rebaptiser « Les années 80 » en « Musique des années 1980 »).
+    const a = source.toLowerCase(), b = tape.toLowerCase();
+    if (a.includes(b) || b.includes(a) || !tape) return source.slice(0, 80);
+  }
+  if (!tape) return 'Quiz';
+  return (tape.charAt(0).toUpperCase() + tape.slice(1)).slice(0, 80);
+}
+
 app.post('/api/ai/generate', auth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
   // La vérification est TOUJOURS active : aucun réglage client ne peut la désactiver.
   const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts } = body;
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
+
+  // Faute de frappe : on propose la bonne orthographe AVANT de produire quoi que
+  // ce soit. Sans ça, un « Grogrzphie » partait en génération et ressortait
+  // comme titre définitif du quiz.
+  if (topic && !personalFacts && !c.req.query('force')) {
+    const correction = await spellSuggestion(topic).catch(() => null);
+    if (correction) {
+      return c.json({ error: 'topic_suggestion', suggestion: correction, saisi: String(topic).trim() }, 409);
+    }
+  }
 
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
   // On en fabrique plus que nécessaire et on écarte ce que ce joueur a déjà vu.
@@ -404,7 +430,12 @@ app.post('/api/ai/generate', auth, async (c) => {
     ).bind(user.id, monthKey()).run();
   }
 
-  return c.json({ questions: questions.map(stripInternal), sources, verified: true });
+  return c.json({
+    questions: questions.map(stripInternal),
+    sources,
+    verified: true,
+    titre: titreDuQuiz(topic, sources),
+  });
 });
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
@@ -801,6 +832,10 @@ app.get('/api/wiki/debug', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const term = c.req.query('q') || 'Napoléon Ier';
   const out = {};
+  // Le correcteur d'orthographe n'est testable qu'ici : Wikipédia est
+  // injoignable depuis l'environnement de développement.
+  try { out.correctionProposee = await spellSuggestion(term); }
+  catch (e) { out.correctionProposee = { erreur: e.message }; }
   try {
     const r = await fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`,
       { headers: { 'User-Agent': 'Quizzalo/1.0 (education quiz app)' } });

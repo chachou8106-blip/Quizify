@@ -36,6 +36,8 @@ export default function Create() {
   const [saved, setSaved] = useState(null);
   const [hideAnswers, setHideAnswers] = useState(false);
   const [sources, setSources] = useState(null);
+  const [titre, setTitre] = useState('');
+  const [correction, setCorrection] = useState(null);
 
   useEffect(() => {
     api('/api/categories').then((d) => setCategories(d.categories)).catch(() => {});
@@ -48,19 +50,27 @@ export default function Create() {
   const catEntries = Object.entries(categories).filter(([id]) => id !== 'birthday' && id !== 'blindtest');
   const visibleCats = showAllCats ? catEntries : catEntries.slice(0, 7);
 
-  const generate = async () => {
-    if (!topic.trim()) { setError('Décris le sujet de ton quiz ✍️'); return; }
-    setLoading(true); setError(''); setSaved(null);
+  // `force` = on passe outre la proposition de correction orthographique.
+  const generate = async (sujet = topic, force = false) => {
+    if (!String(sujet).trim()) { setError('Décris le sujet de ton quiz ✍️'); return; }
+    setLoading(true); setError(''); setSaved(null); setCorrection(null);
     try {
-      const d = await api('/api/ai/generate', {
+      const d = await api(`/api/ai/generate${force ? '?force=1' : ''}`, {
         method: 'POST',
-        body: { topic, category, type, count, difficulty, language: 'fr' },
+        body: { topic: sujet, category, type, count, difficulty, language: 'fr' },
       });
       setQuestions(d.questions);
       setSources(d.sources || null);
+      setTitre(d.titre || String(sujet).trim());
       refresh();
     } catch (e) {
-      setError(e.code === 'quota' ? 'quota' : e.message);
+      // Le sujet ressemble à une faute de frappe : on propose la correction
+      // au lieu de fabriquer un quiz autour d'un mot qui n'existe pas.
+      if (e.code === 'topic_suggestion' && e.data?.suggestion) {
+        setCorrection({ propose: e.data.suggestion, saisi: e.data.saisi });
+      } else {
+        setError(e.code === 'quota' ? 'quota' : e.message);
+      }
     } finally { setLoading(false); }
   };
 
@@ -69,7 +79,7 @@ export default function Create() {
     try {
       const d = await api('/api/quizzes', {
         method: 'POST',
-        body: { title: topic.slice(0, 80), category, difficulty, questions, sources, verified: !!sources },
+        body: { title: (titre || topic).slice(0, 80), category, difficulty, questions, sources, verified: !!sources },
       });
       setSaved(d.quiz);
     } catch (e) { setError(e.message); }
@@ -159,7 +169,32 @@ export default function Create() {
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
 
-        <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">
+        {correction && (
+          <div className="rounded-2xl border-2 border-sunny/60 bg-sunny/10 p-4">
+            <p className="font-display text-lg font-extrabold">
+              Tu voulais peut-être écrire « {correction.propose} » ?
+            </p>
+            <p className="mt-1 text-sm font-semibold text-white/65">
+              « {correction.saisi} » ne correspond à rien de connu — le quiz risquerait de partir sur un tout autre sujet.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => { setTopic(correction.propose); generate(correction.propose, true); }}
+                className="btn-primary !px-4 !py-2 !text-sm"
+              >
+                Oui, utilise « {correction.propose} »
+              </button>
+              <button
+                onClick={() => generate(topic, true)}
+                className="btn-ghost !px-4 !py-2 !text-sm"
+              >
+                Non, garde « {correction.saisi} »
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => generate()} disabled={loading} className="btn-primary w-full text-xl">
           {loading ? '✨ Préparation de ton quiz…' : '✨ Créer mon quiz'}
         </button>
       </div>
@@ -172,7 +207,7 @@ export default function Create() {
               <button onClick={() => setHideAnswers(!hideAnswers)} className="btn-ghost !px-4 !py-2 !text-sm">
                 {hideAnswers ? '👀 Voir les réponses' : '🙈 Masquer (je joue aussi)'}
               </button>
-              <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
+              <button onClick={() => generate()} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
           {sources && sources.length > 0 && (
