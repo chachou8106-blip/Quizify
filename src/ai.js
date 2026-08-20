@@ -493,9 +493,48 @@ Quiz : ${JSON.stringify(questions)}`;
   return verified;
 }
 
+// ---------- Contre-épreuve indépendante ----------
+// On refait passer le quiz « à l'aveugle » : la machine répond elle-même aux questions,
+// sans savoir quelle réponse avait été retenue. Toute divergence = question écartée.
+// C'est ce filtre qui rattrape les affirmations plausibles mais fausses
+// (ex. « les lions chassent le jour ») sur les styles de quiz sans source encyclopédique.
+async function crossCheck(env, questions) {
+  if (!Array.isArray(questions) || questions.length < 2) return questions;
+  const list = questions.map((q, i) =>
+    `${i}. ${q.question}\n${q.options.map((o, j) => `   ${j}) ${o}`).join('\n')}`
+  ).join('\n');
+  const prompt = `Réponds à ce questionnaire. Pour chaque question, donne l'INDEX (0 à 3) de la seule réponse exacte.
+Si tu n'es pas certain à 100 %, ou si plusieurs réponses peuvent convenir, réponds -1.
+
+${list}
+
+Réponds UNIQUEMENT par un tableau JSON d'entiers, un par question, dans l'ordre. Exemple : [2,0,-1,1]`;
+  try {
+    const res = await env.AI.run(MODEL, {
+      messages: [
+        { role: 'system', content: 'Tu es un expert rigoureux. Tu réponds uniquement par un tableau JSON d\'entiers.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 512,
+      temperature: 0,
+    });
+    const answers = extractJSON(extractText(res));
+    if (!Array.isArray(answers) || answers.length !== questions.length) return questions;
+    const kept = questions.filter((q, i) => answers[i] === q.correct);
+    // Garde-fou : si la contre-épreuve rejette presque tout (modèle hésitant),
+    // on préfère le quiz d'origine à un quiz vide.
+    return kept.length >= Math.min(4, Math.ceil(questions.length / 2)) ? kept : questions;
+  } catch {
+    return questions;
+  }
+}
+
 export async function generateQuestions(env, opts) {
-  const prompt = buildPrompt(opts);
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
+  // On en demande quelques-unes de plus : les contrôles en écartent toujours une partie,
+  // et l'utilisateur doit recevoir le nombre de questions qu'il a demandé.
+  const asked = Math.min(count + Math.ceil(count / 3) + 1, 20);
+  const prompt = buildPrompt({ ...opts, count: asked });
 
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -512,7 +551,7 @@ export async function generateQuestions(env, opts) {
       let questions = normalize(extractJSON(text), opts.type);
       // Accept a partial batch rather than failing (e.g. 7/10 questions)
       if (questions.length < Math.min(3, count)) throw new Error(`seulement ${questions.length} question(s) valides`);
-      questions = questions.slice(0, count);
+      questions = questions.slice(0, asked);
       // Passe de vérification : relecture factuelle avant affichage (sauf quiz personnalisés,
       // dont la vérité vient des anecdotes fournies par l'utilisateur).
       if (!opts.personalFacts) {
@@ -520,8 +559,10 @@ export async function generateQuestions(env, opts) {
           const verified = await verifyQuestions(env, questions, opts.language);
           if (verified.length >= Math.min(3, questions.length)) questions = verified;
         } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
+        // Contre-épreuve à l'aveugle : dernier filet avant affichage.
+        questions = await crossCheck(env, questions);
       }
-      return questions;
+      return questions.slice(0, count);
     } catch (e) {
       lastErr = e;
       // brief pause before retrying (transient AI capacity errors)
