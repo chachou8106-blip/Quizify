@@ -20,7 +20,7 @@ import Studio from './pages/Studio';
 export default function App() {
   const location = useLocation();
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen overflow-x-hidden">
       <FloatingDecor />
       <Nav />
       <main key={location.pathname} className="page-enter relative z-10 mx-auto max-w-5xl px-4 pb-24 pt-24">
