@@ -108,7 +108,9 @@ export async function listUsers(env) {
   const rows = await env.DB.prepare(
     `SELECT u.id, u.email, u.name, u.plan, u.plan_expires, u.bonus_ai, u.is_admin, u.created_at,
             (SELECT COUNT(*) FROM quizzes WHERE user_id = u.id) AS quiz,
-            (SELECT COALESCE(count,0) FROM ai_usage WHERE user_id = u.id AND month = strftime('%Y-%m','now')) AS generationsCeMois
+            -- Le COALESCE doit envelopper la sous-requête : sans ligne du tout,
+            -- elle renvoie NULL et la case restait vide à l'écran.
+            COALESCE((SELECT count FROM ai_usage WHERE user_id = u.id AND month = strftime('%Y-%m','now')), 0) AS generationsCeMois
        FROM users u ORDER BY u.created_at DESC LIMIT 500`
   ).all();
   return { joueurs: rows.results || [] };
@@ -268,7 +270,14 @@ export async function githubStats(env) {
   try {
     const r = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=8`, { headers });
     if (!r.ok) {
-      return { connecte: false, erreur: r.status === 404 ? 'Dépôt privé : ajoute un jeton GitHub dans Réglages.' : `GitHub a répondu ${r.status}` };
+      const pourquoi = r.status === 404
+        ? 'Dépôt introuvable ou privé : ajoute un jeton GitHub dans Réglages.'
+        : r.status === 403
+          ? (token
+            ? 'GitHub refuse le jeton : vérifie qu\'il donne accès au dépôt Quizify.'
+            : 'GitHub limite les requêtes anonymes. Ajoute un jeton GitHub dans Réglages.')
+          : `GitHub a répondu ${r.status}`;
+      return { connecte: false, quoiFaire: pourquoi };
     }
     const commits = await r.json();
     return {

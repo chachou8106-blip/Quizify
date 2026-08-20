@@ -14,6 +14,14 @@ const ONGLETS = [
   ['reglages', 'Réglages', '🔑'],
 ];
 
+// Le message brut du moteur est en anglais et incompréhensible : on l'explique.
+const EXPLICATIONS = {
+  'moteur-sature': "Le quota quotidien de création offert par Cloudflare est épuisé. Il repart à 2 h du matin. Passer au forfait payant (5 $/mois) supprime cette limite.",
+  'blind-test': "Aucun morceau trouvé pour cette ambiance. Le thème est sans doute trop pointu pour le catalogue musical.",
+  'creation': "Le moteur n'a pas produit assez de questions valables. Souvent un sujet trop vague ou trop obscur.",
+  'export': "L'envoi de la banque de questions vers GitHub a échoué. Vérifie le jeton GitHub dans Réglages.",
+};
+
 const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n ?? 0);
 const date = (s) => (s ? new Date(s.replace(' ', 'T') + (s.includes('Z') ? '' : 'Z')).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -504,8 +512,9 @@ export default function Admin() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <span className="rounded-full bg-cherry/20 px-2 py-0.5 text-xs font-extrabold text-cherry">{e.kind}</span>
-                    <p className="mt-1 font-bold">{e.message}</p>
-                    {e.detail && <p className="text-xs font-semibold text-white/45">{e.detail}</p>}
+                    {EXPLICATIONS[e.kind] && <p className="mt-1 font-bold">{EXPLICATIONS[e.kind]}</p>}
+                    {e.detail && <p className="mt-0.5 text-xs font-semibold text-white/55">{e.detail}</p>}
+                    <p className="mt-0.5 font-mono text-[11px] text-white/30">{e.message}</p>
                   </div>
                   <span className="shrink-0 text-xs font-semibold text-white/40">{date(e.created_at)}</span>
                 </div>
