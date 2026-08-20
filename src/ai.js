@@ -261,10 +261,11 @@ ${context}
 RÈGLES ABSOLUES :
 1. Chaque question porte sur une information EXPLICITEMENT écrite dans les sources ci-dessus. N'utilise JAMAIS tes connaissances personnelles.
 2. La bonne réponse doit être un mot ou une expression qui APPARAÎT tel quel dans les sources.
-3. Les 3 mauvaises réponses sont clairement fausses mais plausibles et de même nature (même type de mot, même ordre de grandeur).
-4. JAMAIS deux options qui pourraient être toutes les deux correctes.
-5. Orthographe, accents et grammaire irréprochables. Formulation claire pour un élève.
-6. L'explication cite l'information exacte de la source.
+3. Les 3 mauvaises réponses sont de VRAIS termes existants, plausibles et de même nature (même type de mot, même ordre de grandeur). N'invente jamais un faux mot en dérivant la bonne réponse (« photosynthèse » → « respiration hybride » est INTERDIT).
+4. JAMAIS deux options qui pourraient être toutes les deux correctes. Si la source donne deux noms pour une même chose (« dit X ou Y »), n'utilise pas cette information.
+5. Questions COURTES et naturelles (15 mots maximum). Ne recopie pas la phrase de la source : reformule.
+6. Orthographe, accents et grammaire irréprochables. Formulation claire pour un élève.
+7. L'explication est brève (1 phrase) et s'appuie sur la source.
 Difficulté : ${diff}.
 
 Génère EXACTEMENT ${n} questions à choix multiples (4 options, une seule correcte, position variée).
@@ -289,11 +290,20 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
     } catch { /* on retentera */ }
   }
 
-  // Filtre de vérification : la bonne réponse doit être soutenue par la source
+  // Filtre de vérification : la bonne réponse doit être soutenue par la source,
+  // et aucune mauvaise option ne doit être citée dans l'explication (signe d'ambiguïté,
+  // ex. « dit le Grand ou le Roi-Soleil » où deux options seraient acceptables).
   const verified = [];
   for (const q of candidates) {
     const good = q.options[q.correct];
     if (!answerSupported(good, ctxNorm)) continue;
+    const whyNorm = normText(q.explanation || '');
+    const ambiguous = q.options.some((o, i) => {
+      if (i === q.correct) return false;
+      const on = normText(o);
+      return on.length > 4 && whyNorm.includes(on);
+    });
+    if (ambiguous) continue;
     verified.push({ ...q, verified: true });
     if (verified.length >= n) break;
   }
