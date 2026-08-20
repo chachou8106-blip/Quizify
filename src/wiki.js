@@ -24,8 +24,12 @@ export function normText(s) {
 }
 
 // --- Wikipédia : récupère de vrais extraits d'articles liés au sujet ---
-export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000 } = {}) {
-  const key = `wiki:${normText(topic).slice(0, 80)}`;
+// `deep` : au lieu de la seule introduction, on lit l'article en entier et on
+// va chercher davantage d'articles liés. C'est ce qui permet de continuer à
+// produire des questions inédites sur un sujet déjà largement exploité.
+export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000, deep = false } = {}) {
+  if (deep) { maxArticles = 6; chars = 7000; }
+  const key = `wiki:${deep ? 'deep:' : ''}${normText(topic).slice(0, 80)}`;
   try {
     const hit = await env.KV.get(key);
     if (hit) return JSON.parse(hit);
@@ -39,7 +43,8 @@ export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000 } 
   if (!titles.length) return [];
 
   const data = await wapi('fr.wikipedia.org', {
-    action: 'query', prop: 'extracts', explaintext: '1', exintro: '1',
+    action: 'query', prop: 'extracts', explaintext: '1',
+    ...(deep ? {} : { exintro: '1' }),
     exlimit: 'max', titles: titles.join('|'), redirects: '1',
   });
   const pages = Object.values(data?.query?.pages || {});

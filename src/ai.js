@@ -253,9 +253,9 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
 // L'IA ne puise plus dans sa mémoire : elle rédige à partir d'extraits encyclopédiques
 // réels, et chaque bonne réponse doit se retrouver dans la source, sinon la question saute.
 
-export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice' }) {
+export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice', deep = false, avoid = [] }) {
   const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
-  const sources = await wikiContext(env, topic);
+  const sources = await wikiContext(env, topic, { deep });
   if (!sources.length) {
     return { questions: [], sources: [], reason: 'Aucun article Wikipédia trouvé pour ce sujet.' };
   }
@@ -285,6 +285,7 @@ Difficulté : ${diff}.
 STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
 
 Génère EXACTEMENT ${perBatch} questions (4 options, une seule correcte, position variée).
+${avoid.length ? `\nCES SUJETS SONT DÉJÀ PRIS — n'y reviens sous aucune forme, même reformulés, et va chercher d'autres informations dans les sources :\n${avoid.slice(0, 25).map((a) => `- ${a}`).join('\n')}\n` : ''}
 Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b","c","d"],"correct":0,"explanation":"..."}]`;
 
   // Budget de temps : on enchaîne les passes tant qu'il reste du temps, jamais au-delà.

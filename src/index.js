@@ -324,7 +324,38 @@ app.post('/api/ai/generate', auth, async (c) => {
     if (kept.length >= Math.min(3, fresh.length)) fresh = kept;
   }
 
-  const merged = [...fromBank, ...fresh].slice(0, totalWanted);
+  let merged = [...fromBank, ...fresh].slice(0, totalWanted);
+
+  // Le filtre anti-doublon a raccourci le quiz : on repart chercher, mais cette
+  // fois en lisant les articles EN ENTIER (pas seulement l'introduction) et en
+  // interdisant explicitement les angles déjà pris.
+  if (merged.length < totalWanted && !personalFacts && VERIFIABLE_TYPES.has(type)) {
+    try {
+      const avoid = merged.map((q) => `${q.question} → ${q.options[q.correct]}`);
+      const more = await generateVerifiedQuestions(c.env, {
+        topic: String(topic || ''), count: (totalWanted - merged.length) + 2,
+        difficulty, language, type, deep: true, avoid,
+      });
+      const extra = await fingerprintAll(more.questions || [], String(topic || ''));
+      const takenFp = new Set(merged.map((q) => q.fp));
+      const takenAk = new Set(merged.map((q) => q.ak).filter(Boolean));
+      const seenFp = await seenByUser(c.env, user.id, extra.map((q) => q.fp));
+      const seenAk = await seenAnswerKeys(c.env, user.id, extra.map((q) => q.ak));
+      for (const q of extra) {
+        if (merged.length >= totalWanted) break;
+        if (takenFp.has(q.fp) || seenFp.has(q.fp)) continue;
+        if (q.ak && (takenAk.has(q.ak) || seenAk.has(q.ak))) continue;
+        takenFp.add(q.fp); if (q.ak) takenAk.add(q.ak);
+        merged.push(q);
+        fresh.push(q);
+      }
+      if (more.sources?.length) {
+        sources = [...(sources || []), ...more.sources]
+          .filter((s, i, arr) => arr.findIndex((o) => o.url === s.url) === i).slice(0, 6);
+      }
+    } catch { /* on rend ce qu'on a plutôt que d'échouer */ }
+  }
+
   questions = merged;
   const bankSources = sourcesOf(fromBank);
   if (bankSources) sources = [...(sources || []), ...bankSources].filter(
