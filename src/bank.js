@@ -65,10 +65,14 @@ export async function answerKey(topic, answer) {
 export async function fingerprintAll(questions, topic = '') {
   return Promise.all(questions.map(async (q) => {
     const good = q.options?.[q.correct] ?? '';
+    // « Le juste prix » (une seule option) : deux questions différentes peuvent
+    // légitimement tomber sur le même nombre. On garde l'empreinte du texte,
+    // mais pas la clé de réponse, qui les confondrait à tort.
+    const chiffree = Array.isArray(q.options) && q.options.length === 1;
     return {
       ...q,
       fp: await fingerprint(q.question, good),
-      ak: await answerKey(topic, good),
+      ak: chiffree ? null : await answerKey(topic, good),
     };
   }));
 }
@@ -85,7 +89,7 @@ export async function drawUnseen(env, { userId, topic, type, difficulty, languag
          LEFT JOIN answer_seen  a ON a.ak = b.ak AND a.user_id = ?
         WHERE b.topic_key = ? AND b.type = ? AND b.difficulty = ? AND b.language = ?
           AND s.fp IS NULL AND a.ak IS NULL
-        GROUP BY b.ak
+        GROUP BY COALESCE(b.ak, b.fp)
         ORDER BY b.served ASC, RANDOM()
         LIMIT ?`
     ).bind(userId, userId, topicKey(topic), type, difficulty, language, limit).all();

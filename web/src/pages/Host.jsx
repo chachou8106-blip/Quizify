@@ -16,6 +16,7 @@ export default function Host() {
   const [state, setState] = useState('lobby');
   const [hostPlays, setHostPlays] = useState(false);
   const [myAnswer, setMyAnswer] = useState(null);
+  const [monNombre, setMonNombre] = useState('');
   const [game, setGame] = useState({ players: [] });
   const [q, setQ] = useState(null);
   const [reveal, setReveal] = useState(null);
@@ -122,6 +123,38 @@ export default function Host() {
             <AudioClip key={q.idx} autoPlay src={q.audioUrl} className="mx-auto mt-4 w-full max-w-md" />
           )}
         </div>
+        {q.options?.length === 1 ? (
+          <div className="card border-2 border-sunny/60 text-center">
+            <p className="font-display text-2xl font-extrabold text-sunny">💰 Le juste prix</p>
+            <p className="mt-1 font-semibold text-white/60">
+              Chacun propose un nombre sur son téléphone — le plus proche remporte la mise.
+            </p>
+            {hostPlays && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const v = Number(String(monNombre).replace(',', '.'));
+                  if (!Number.isFinite(v) || monNombre === '') return;
+                  wsRef.current?.send(JSON.stringify({ t: 'answer', i: v }));
+                  navigator.vibrate?.(40);
+                }}
+                className="mx-auto mt-4 flex max-w-sm gap-2"
+              >
+                <input
+                  value={monNombre}
+                  onChange={(e) => setMonNombre(e.target.value.replace(/[^0-9.,-]/g, '').slice(0, 15))}
+                  inputMode="decimal"
+                  placeholder="Ton nombre"
+                  disabled={myAnswer !== null}
+                  className="input text-center font-display text-2xl font-extrabold"
+                />
+                <button className="btn-sunny whitespace-nowrap" disabled={myAnswer !== null || monNombre === ''}>
+                  {myAnswer !== null ? '✅ Envoyé' : 'Je propose'}
+                </button>
+              </form>
+            )}
+          </div>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => (
             hostPlays ? (
@@ -140,6 +173,7 @@ export default function Host() {
             )
           ))}
         </div>
+        )}
         <div className="card flex items-center justify-between">
           <p className="font-display text-xl font-extrabold">✋ {answered.answered} / {answered.total || game.players?.length || 0} réponses</p>
           <button onClick={() => send('next')} className="btn-sunny">Révéler ⏭</button>
@@ -152,6 +186,27 @@ export default function Host() {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
         <h2 className="text-center font-display text-2xl font-extrabold">✅ La bonne réponse était :</h2>
+        {reveal.propositions ? (
+          <div className="space-y-3">
+            <div className="card border-4 border-sunny text-center">
+              <p className="font-display text-4xl font-extrabold text-sunny">
+                {Number(reveal.bonneValeur).toLocaleString('fr-FR')}
+              </p>
+            </div>
+            <div className="card space-y-2">
+              {reveal.propositions.length === 0 && (
+                <p className="text-center font-semibold text-white/50">Personne n'a proposé de nombre.</p>
+              )}
+              {reveal.propositions.map((x, r) => (
+                <div key={x.name} className={`flex items-center justify-between rounded-2xl px-4 py-2 font-bold ${r === 0 ? 'bg-minty/20 text-minty' : 'bg-white/5 text-white/70'}`}>
+                  <span>{r === 0 ? '🏆' : `${r + 1}.`} {x.name}{x.exact ? ' 🎯' : ''}</span>
+                  <span>{x.guess.toLocaleString('fr-FR')} <span className="text-white/40">(écart {x.ecart.toLocaleString('fr-FR')})</span></span>
+                  <span className="text-sunny">+{x.points}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {(q?.options || []).map((o, i) => (
             <div key={i} className={`card flex items-center justify-between !py-4 font-display text-xl font-extrabold ${i === reveal.correct ? 'border-4 border-minty' : 'opacity-50'}`}>
@@ -160,6 +215,7 @@ export default function Host() {
             </div>
           ))}
         </div>
+        )}
         {reveal.explanation && <p className="card bg-sunny/15 font-bold">💡 {reveal.explanation}</p>}
         <div className="card">
           <h3 className="mb-3 font-display text-xl font-extrabold">🏆 Classement</h3>

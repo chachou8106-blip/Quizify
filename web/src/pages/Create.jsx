@@ -12,6 +12,7 @@ const TYPES = [
   { value: 'quote', label: '💬 Qui a dit ça ?', hint: 'Une phrase célèbre, à qui appartient-elle ?' },
   { value: 'chrono', label: '🕰️ Lequel en premier ?', hint: 'Remets les événements dans l\'ordre.' },
   { value: 'intru', label: '🔍 Trouve l\'intrus', hint: 'Quatre propositions, une n\'a rien à faire là.' },
+  { value: 'price', label: '💰 Le juste prix', hint: 'Une réponse chiffrée : chacun propose un nombre, le plus proche gagne.' },
   { value: 'math', label: '🧮 Calcul mental', hint: 'Idéal pour faire travailler les enfants.' },
   { value: 'anagram', label: '🔤 Anagrammes', hint: 'Des lettres mélangées à remettre en ordre.' },
   { value: 'mixed', label: '🎲 Mix surprise', hint: 'Un peu de tous les styles.' },

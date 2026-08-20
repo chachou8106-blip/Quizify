@@ -47,6 +47,13 @@ export default function QuizPreview({ questions }) {
                 <span className="shrink-0 text-sm opacity-60">{vu ? '🙈' : '👀'}</span>
               </button>
 
+              {q.options?.length === 1 ? (
+                <p className="mt-2 font-bold">
+                  {vu
+                    ? <span className="rounded-full bg-minty-light px-3 py-1 text-sm text-emerald-900">💰 {Number(q.options[0]).toLocaleString('fr-FR')}</span>
+                    : <span className="rounded-full bg-white/10 px-3 py-1 text-sm text-white/60">💰 réponse chiffrée</span>}
+                </p>
+              ) : (
               <div className="mt-2 flex flex-wrap gap-2">
                 {q.options.map((o, j) => (
                   <span
@@ -61,6 +68,7 @@ export default function QuizPreview({ questions }) {
                   </span>
                 ))}
               </div>
+              )}
 
               {vu && q.explanation && (
                 <p className="mt-2 text-sm font-semibold text-white/50">💡 {q.explanation}</p>

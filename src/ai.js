@@ -37,6 +37,13 @@ export const CATEGORIES = {
 const DIFF_LABEL = { easy: 'facile (grand public, réponses évidentes pour qui connaît un peu le sujet)', medium: 'moyen (il faut bien connaître le sujet)', hard: 'difficile (pour experts, détails pointus)' };
 
 const TYPE_RULES = {
+    price: `C'est un quiz LE JUSTE PRIX : chaque question appelle une réponse CHIFFRÉE unique et vérifiable (un prix, une distance, une durée, une quantité, une population…).
+RÈGLES :
+1. L'UNITÉ doit figurer dans le texte de la question, jamais ailleurs (ex. « Combien de kilomètres séparent Paris de Marseille ? », « Combien d'habitants compte Tokyo ? »).
+2. Le champ "answer" est un NOMBRE brut, sans espace, sans symbole, sans séparateur de milliers : écris 1250000 et non « 1,25 million » ni « 1 250 000 ».
+3. N'utilise PAS de champ "options" : il n'y a pas de propositions, les joueurs devinent le nombre.
+4. Choisis des ordres de grandeur devinables en soirée, et des faits stables (pas un prix qui change chaque mois).
+Format EXACT : {"question":"...","answer":<nombre>,"explanation":"..."}`,
     trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
     emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
     riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
@@ -91,7 +98,9 @@ Pour toute notation mathématique, utilise UNIQUEMENT les symboles Unicode : ²,
 Orthographe, accents et grammaire françaises impeccables.
 INTERDIT : proposer deux options qui pourraient être toutes les deux correctes (deux noms d'une même chose, deux graphies d'un même mot, une réponse contestée par les spécialistes). En cas de doute sur un fait, choisis une autre question.
 Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, au format :
-[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]`;
+${type === 'price'
+  ? '[{"question":"...","answer":1969,"unit":"","explanation":"..."}]'
+  : '[{"question":"...","options":["...","...","...","..."],"correct":0,"explanation":"..."}]'}`;
 }
 
 function extractText(res) {
@@ -173,6 +182,25 @@ function normalize(raw, type) {
   const out = [];
   for (const q of raw) {
     if (!q || typeof q.question !== 'string' || !q.question.trim()) continue;
+
+    // « Le juste prix » : pas de choix multiple, une seule valeur numérique.
+    // On conserve tout de même la forme options/correct pour que tout le reste
+    // de la chaîne (empreintes, banque, stockage) continue de fonctionner.
+    if (type === 'price') {
+      const brut = typeof q.answer === 'number' ? q.answer : parseFloat(String(q.answer ?? '').replace(/[^0-9.,-]/g, '').replace(',', '.'));
+      if (!Number.isFinite(brut)) continue;
+      // Une seule option = signature d'une question chiffrée. Cette convention
+      // traverse le stockage sans champ supplémentaire : tout le reste de
+      // l'application reconnaît le format à `options.length === 1`.
+      out.push({
+        question: cleanMath(q.question.trim()),
+        options: [String(brut)],
+        correct: 0,
+        explanation: typeof q.explanation === 'string' ? cleanMath(q.explanation.trim()) : '',
+      });
+      continue;
+    }
+
     let options = Array.isArray(q.options) ? q.options.map((o) => String(o)) : null;
     let correct = Number.isInteger(q.correct) ? q.correct : null;
     // Tolerate {answer: "text"} style
@@ -605,19 +633,23 @@ export async function generateQuestions(env, opts) {
       questions = questions.slice(0, asked);
       // Passe de vérification : relecture factuelle avant affichage (sauf quiz personnalisés,
       // dont la vérité vient des anecdotes fournies par l'utilisateur).
-      if (!opts.personalFacts) {
+      // Les relectures ci-dessous raisonnent en « quelle option est la bonne ? » :
+      // elles n'ont aucun sens sur une réponse chiffrée unique, où le contrôle
+      // utile est l'ordre de grandeur, pas le choix entre propositions.
+      const aDesOptions = opts.type !== 'price';
+      if (!opts.personalFacts && aDesOptions) {
         try {
           const verified = await verifyQuestions(env, questions, opts.language);
           if (verified.length >= Math.min(3, questions.length)) questions = verified;
         } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
         // Contre-épreuve à l'aveugle : dernier filet avant affichage.
         if (Date.now() - started < 45000) questions = await crossCheck(env, questions);
-        // Le quiz parle-t-il bien du sujet demandé ?
-        if (opts.topic && Date.now() - started < 50000) {
-          const surSujet = await dropOffTopic(env, questions, opts.topic);
-          if (surSujet.length === 0) throw new Error('hors_sujet');
-          questions = surSujet;
-        }
+      }
+      // Le quiz parle-t-il bien du sujet demandé ? (valable pour tous les types)
+      if (!opts.personalFacts && opts.topic && Date.now() - started < 50000) {
+        const surSujet = await dropOffTopic(env, questions, opts.topic);
+        if (surSujet.length === 0) throw new Error('hors_sujet');
+        questions = surSujet;
       }
       return questions.slice(0, count);
     } catch (e) {

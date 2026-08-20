@@ -17,6 +17,7 @@ export default function Join() {
   const [game, setGame] = useState({});
   const [q, setQ] = useState(null);
   const [myAnswer, setMyAnswer] = useState(null);
+  const [proposition, setProposition] = useState('');
   const [reveal, setReveal] = useState(null);
   const [podium, setPodium] = useState(null);
   const [reward, setReward] = useState(null);
@@ -44,13 +45,13 @@ export default function Join() {
       const m = JSON.parse(ev.data);
       if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }
       if (m.t === 'question') {
-        setQ(m); setMyAnswer(null); setReveal(null); setState('question');
+        setQ(m); setMyAnswer(null); setReveal(null); setProposition(''); setState('question');
         clearInterval(timerRef.current);
         const tick = () => setSecondsLeft(Math.max(0, Math.ceil((m.endsAt - Date.now()) / 1000)));
         tick();
         timerRef.current = setInterval(tick, 250);
       }
-      if (m.t === 'answered') { setMyAnswer(m.i); setState('answered'); }
+      if (m.t === 'answered') { setMyAnswer(m.i ?? m.guess); setState('answered'); }
       if (m.t === 'reveal') {
         clearInterval(timerRef.current);
         setReveal(m); setState('reveal');
@@ -74,6 +75,18 @@ export default function Join() {
     if (myAnswer !== null || state !== 'question') return;
     wsRef.current?.send(JSON.stringify({ t: 'answer', i }));
     setMyAnswer(i);
+    setState('answered');
+    navigator.vibrate?.(40);
+  };
+
+  // « Le juste prix » : on envoie le nombre proposé, pas un indice d'option.
+  const envoyerNombre = (e) => {
+    e?.preventDefault();
+    if (myAnswer !== null || state !== 'question') return;
+    const valeur = Number(String(proposition).replace(',', '.'));
+    if (!Number.isFinite(valeur) || proposition === '') return;
+    wsRef.current?.send(JSON.stringify({ t: 'answer', i: valeur }));
+    setMyAnswer(valeur);
     setState('answered');
     navigator.vibrate?.(40);
   };
@@ -116,15 +129,31 @@ export default function Join() {
           <span className={`rounded-full px-4 py-1 text-white ${secondsLeft <= 5 ? 'animate-pulseBig bg-cherry' : 'bg-slate-700'}`}>⏱ {secondsLeft}s</span>
         </div>
         <div className="card"><h2 className="text-center font-display text-xl font-extrabold">{q.question}</h2></div>
-        <div className="grid grid-cols-2 gap-3">
-          {q.options.map((o, i) => (
-            <button key={i} onClick={() => answer(i)}
-              className={`${COLORS[i % 4]} min-h-28 rounded-3xl p-4 font-display text-lg font-extrabold text-white shadow-pop transition-transform active:translate-y-1 active:shadow-none`}>
-              <div className="text-2xl">{SHAPES[i % 4]}</div>
-              {o}
-            </button>
-          ))}
-        </div>
+        {q.options?.length === 1 ? (
+          // Le juste prix : aucune proposition affichée, chacun avance son chiffre.
+          <form onSubmit={envoyerNombre} className="card space-y-3 border-2 border-sunny/60">
+            <p className="text-center font-bold text-white/60">💰 Propose ton chiffre — le plus proche gagne</p>
+            <input
+              value={proposition}
+              onChange={(e) => setProposition(e.target.value.replace(/[^0-9.,-]/g, '').slice(0, 15))}
+              inputMode="decimal"
+              autoFocus
+              placeholder="Ton nombre"
+              className="input text-center font-display text-3xl font-extrabold"
+            />
+            <button className="btn-sunny w-full text-xl" disabled={proposition === ''}>Je propose ! 💰</button>
+          </form>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {q.options.map((o, i) => (
+              <button key={i} onClick={() => answer(i)}
+                className={`${COLORS[i % 4]} min-h-28 rounded-3xl p-4 font-display text-lg font-extrabold text-white shadow-pop transition-transform active:translate-y-1 active:shadow-none`}>
+                <div className="text-2xl">{SHAPES[i % 4]}</div>
+                {o}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -142,8 +171,37 @@ export default function Join() {
   if (state === 'reveal' && reveal) {
     const mine = reveal.leaderboard.find((p) => p.name === name.trim());
     const rank = reveal.leaderboard.findIndex((p) => p.name === name.trim()) + 1;
-    const good = myAnswer === reveal.correct;
+    // « Le juste prix » : il n'y a ni bonne ni mauvaise réponse, seulement un écart.
+    const chiffre = reveal.bonneValeur !== null && reveal.bonneValeur !== undefined;
+    const maLigne = chiffre ? reveal.propositions?.find((x) => x.name === name.trim()) : null;
+    const monRang = chiffre ? (reveal.propositions || []).findIndex((x) => x.name === name.trim()) : -1;
+    const good = chiffre ? monRang === 0 : myAnswer === reveal.correct;
     if (good) { navigator.vibrate?.([50, 40, 50]); }
+
+    if (chiffre) {
+      return (
+        <div className="mx-auto max-w-md space-y-5 pt-8 text-center">
+          <div className="text-7xl">{maLigne?.exact ? '🎯' : monRang === 0 ? '🏆' : '💰'}</div>
+          <h1 className="font-display text-3xl font-extrabold">
+            {maLigne?.exact ? 'Pile poil !' : monRang === 0 ? 'Le plus proche, bravo !' : `+${maLigne?.points || 0} points`}
+          </h1>
+          <div className="card space-y-2">
+            <p className="font-display text-2xl font-extrabold text-sunny">
+              Réponse : {reveal.bonneValeur.toLocaleString('fr-FR')}
+            </p>
+            {maLigne && (
+              <p className="font-semibold text-white/60">
+                Toi : {maLigne.guess.toLocaleString('fr-FR')} — écart de {maLigne.ecart.toLocaleString('fr-FR')}
+              </p>
+            )}
+          </div>
+          {reveal.explanation && <p className="card font-semibold">💡 {reveal.explanation}</p>}
+          {mine && <p className="text-xl font-bold text-white/60">Tu es {rank === 1 ? '🥇 1er' : rank === 2 ? '🥈 2e' : rank === 3 ? '🥉 3e' : `${rank}e`} avec {mine.score} pts</p>}
+          <p className="font-semibold text-white/50">{reveal.isLast ? 'Résultats finaux dans un instant…' : 'Prochaine question bientôt…'}</p>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-md space-y-5 pt-8 text-center">
         <div className="text-7xl">{good ? '✅' : '❌'}</div>

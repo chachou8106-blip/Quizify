@@ -5,6 +5,12 @@ import { DurableObject } from 'cloudflare:workers';
 
 const QUESTION_SECONDS = 20;
 
+// Une question à une seule option est une question « juste prix » : il n'y a
+// pas de propositions à choisir, la bonne réponse est le nombre lui-même.
+function estChiffree(q) {
+  return Array.isArray(q?.options) && q.options.length === 1;
+}
+
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -138,11 +144,30 @@ export class GameRoom extends DurableObject {
     if (p.answers[qIdx] !== undefined) return; // already answered
     const now = Date.now();
     if (now > game.qEnd) return; // too late
-    const i = parseInt(rawIndex);
     const q = game.quiz.questions[qIdx];
-    if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
     const elapsed = now - game.qStart;
     const duration = game.qEnd - game.qStart;
+
+    // « Le juste prix » : une seule option = la réponse est un nombre à deviner.
+    // Personne ne peut être « juste » ou « faux » sur le coup : les points sont
+    // attribués à la révélation, quand on connaît les propositions de tous.
+    if (estChiffree(q)) {
+      const valeur = Number(String(rawIndex).replace(',', '.'));
+      if (!Number.isFinite(valeur)) return;
+      p.answers[qIdx] = { guess: valeur, points: 0 };
+      p.pendingGuess = true;
+      players[name.toLowerCase()] = p;
+      await this.ctx.storage.put('players', players);
+      try { ws.send(JSON.stringify({ t: 'answered', guess: valeur })); } catch {}
+      const tousLes = Object.keys(players).length;
+      const ontRepondu = Object.values(players).filter((pl) => pl.answers[qIdx] !== undefined).length;
+      this.broadcast({ t: 'answerCount', answered: ontRepondu, total: tousLes }, 'host');
+      if (ontRepondu >= tousLes) await this.reveal(game);
+      return;
+    }
+
+    const i = parseInt(rawIndex);
+    if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
     let points = 0;
     if (i === q.correct) {
       // Speed points + streak bonus (combo of consecutive correct answers)
@@ -214,10 +239,39 @@ export class GameRoom extends DurableObject {
     const players = (await this.ctx.storage.get('players')) || {};
     const q = fresh.quiz.questions[fresh.currentQ];
     const counts = q.options.map(() => 0);
-    for (const p of Object.values(players)) {
-      const a = p.answers[fresh.currentQ];
-      if (a) counts[a.i]++;
+    let propositions = null;
+
+    if (estChiffree(q)) {
+      // Classement par écart à la bonne réponse : le plus proche rafle la mise.
+      const bonne = Number(q.options[0]);
+      const liste = [];
+      for (const [cle, p] of Object.entries(players)) {
+        const a = p.answers[fresh.currentQ];
+        if (!a || typeof a.guess !== 'number') { p.streak = 0; continue; }
+        liste.push({ cle, nom: p.name, guess: a.guess, ecart: Math.abs(a.guess - bonne) });
+      }
+      liste.sort((x, y) => x.ecart - y.ecart);
+      const BAREME = [1000, 700, 500, 350];
+      liste.forEach((entree, rang) => {
+        const p = players[entree.cle];
+        // Tomber pile vaut un bonus : c'est le moment de gloire de la soirée.
+        const exact = entree.ecart === 0;
+        const pts = (BAREME[rang] ?? 200) + (exact ? 250 : 0);
+        p.answers[fresh.currentQ].points = pts;
+        p.score += pts;
+        p.streak = rang === 0 ? (p.streak || 0) + 1 : 0;
+        entree.points = pts;
+        entree.exact = exact;
+      });
+      await this.ctx.storage.put('players', players);
+      propositions = liste.map((e) => ({ name: e.nom, guess: e.guess, ecart: e.ecart, points: e.points, exact: e.exact }));
+    } else {
+      for (const p of Object.values(players)) {
+        const a = p.answers[fresh.currentQ];
+        if (a && Number.isInteger(a.i)) counts[a.i]++;
+      }
     }
+
     const leaderboard = this.leaderboard(players, fresh.currentQ);
     this.broadcast({
       t: 'reveal',
@@ -226,6 +280,8 @@ export class GameRoom extends DurableObject {
       correct: q.correct,
       explanation: q.explanation || '',
       counts,
+      propositions,
+      bonneValeur: estChiffree(q) ? Number(q.options[0]) : null,
       leaderboard,
       isLast: fresh.currentQ >= fresh.quiz.questions.length - 1,
     });

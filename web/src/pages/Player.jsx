@@ -11,6 +11,7 @@ export default function Player({ mode }) {
   const [error, setError] = useState('');
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState(null);
+  const [monNombre, setMonNombre] = useState('');
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
 
@@ -44,6 +45,7 @@ export default function Player({ mode }) {
   };
 
   const next = () => {
+    setMonNombre('');
     if (idx + 1 >= total) setDone(true);
     else { setIdx(idx + 1); setPicked(null); }
   };
@@ -91,6 +93,36 @@ export default function Player({ mode }) {
         {q.audioUrl && (
           <AudioClip key={idx} autoPlay src={q.audioUrl} className="mt-4 w-full" />
         )}
+        {q.options?.length === 1 ? (
+          // « Le juste prix » en solo : on tape un nombre, on mesure l'écart.
+          // Le point est accordé si on tombe à moins de 10 % de la vraie valeur.
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (picked !== null) return;
+              const v = Number(String(monNombre).replace(',', '.'));
+              if (!Number.isFinite(v) || monNombre === '') return;
+              const bonne = Number(q.options[0]);
+              const proche = Math.abs(v - bonne) <= Math.max(1, Math.abs(bonne) * 0.1);
+              setPicked(v);
+              if (proche) {
+                setScore((sc) => sc + 1);
+                confetti({ particleCount: 45, spread: 65, origin: { y: 0.75 }, scalar: 0.8 });
+              }
+            }}
+            className="mt-5 flex gap-2"
+          >
+            <input
+              value={monNombre}
+              onChange={(e) => setMonNombre(e.target.value.replace(/[^0-9.,-]/g, '').slice(0, 15))}
+              inputMode="decimal"
+              disabled={picked !== null}
+              placeholder="Ton nombre"
+              className="input text-center font-display text-2xl font-extrabold"
+            />
+            <button className="btn-sunny whitespace-nowrap" disabled={picked !== null || monNombre === ''}>💰 Valider</button>
+          </form>
+        ) : (
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {q.options.map((o, i) => {
             let cls = 'border-white/15 bg-white/10 hover:border-grape';
@@ -107,10 +139,13 @@ export default function Player({ mode }) {
             );
           })}
         </div>
+        )}
         {picked !== null && (
           <div className="mt-5 space-y-3">
             <p className="font-display text-xl font-extrabold">
-              {picked === q.correct ? '✅ Bonne réponse !' : `❌ Raté ! C'était : ${q.options[q.correct]}`}
+              {q.options?.length === 1
+                ? `🎯 La réponse était ${Number(q.options[0]).toLocaleString('fr-FR')} — tu as proposé ${Number(picked).toLocaleString('fr-FR')}`
+                : picked === q.correct ? '✅ Bonne réponse !' : `❌ Raté ! C'était : ${q.options[q.correct]}`}
             </p>
             {q.explanation && <p className="rounded-2xl bg-sunny/15 p-3 font-semibold">💡 {q.explanation}</p>}
             <button onClick={next} className="btn-primary w-full">{idx + 1 >= total ? '🏁 Voir mon score' : 'Question suivante →'}</button>
