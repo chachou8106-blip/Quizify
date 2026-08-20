@@ -57,7 +57,9 @@ export default function BlindTest() {
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
-  const [hideAnswers, setHideAnswers] = useState(false);
+  // Masqué par défaut : afficher les titres et les extraits gâcherait le blind test
+  // pour l'animateur lui-même.
+  const [hideAnswers, setHideAnswers] = useState(true);
   const [showAllThemes, setShowAllThemes] = useState(false);
 
   const toggle = (label) => {
@@ -149,7 +151,7 @@ export default function BlindTest() {
             <h2 className="font-display text-2xl font-extrabold">Aperçu ({questions.length} morceaux)</h2>
             <div className="flex gap-2">
               <button onClick={() => setHideAnswers(!hideAnswers)} className="btn-ghost !px-4 !py-2 !text-sm">
-                {hideAnswers ? '👀 Tout voir' : '🙈 Masquer (je joue aussi)'}
+                {hideAnswers ? '👀 Afficher les titres' : '🙈 Remasquer'}
               </button>
               <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Autres morceaux</button>
             </div>
@@ -158,7 +160,7 @@ export default function BlindTest() {
             <div className="rounded-2xl bg-white/5 p-6 text-center">
               <div className="text-4xl">🙈🎶</div>
               <p className="mt-2 font-display text-lg font-extrabold">{questions.length} morceaux surprise prêts !</p>
-              <p className="font-semibold text-white/50">Les titres et extraits sont cachés pour que tu puisses jouer toi aussi.</p>
+              <p className="font-semibold text-white/50">Les titres et les extraits restent cachés — tu peux jouer toi aussi.</p>
             </div>
           ) : (
             <ol className="space-y-3">

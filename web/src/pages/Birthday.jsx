@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
 import CountPicker from '../components/CountPicker';
+import QuizPreview from '../components/QuizPreview';
 
 export default function Birthday() {
   const { user, ready, refresh } = useAuth();
@@ -83,7 +84,7 @@ export default function Birthday() {
         </div>
         <div>
           <h2 className="mb-2 font-display text-xl font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Nombre de questions</h2>
-          <CountPicker value={count} onChange={setCount} max={15} />
+          <CountPicker value={count} onChange={setCount} max={40} />
         </div>
 
         {error === 'quota' ? (
@@ -100,19 +101,8 @@ export default function Birthday() {
       {questions && (
         <div className="card space-y-4">
           <h2 className="font-display text-2xl font-extrabold">Aperçu — vérifie que tout est juste 👀</h2>
-          <p className="font-semibold text-white/50">💡 Ici tu vois les réponses pour vérifier les anecdotes — normal, c'est TON quiz sur elle. En partie live, active « 🙋 Je joue aussi » pour participer quand même !</p>
-          <ol className="space-y-3">
-            {questions.map((q, i) => (
-              <li key={i} className="rounded-2xl bg-white/5 p-4">
-                <p className="font-bold">{i + 1}. {q.question}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {q.options.map((o, j) => (
-                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white/10 text-white/60'}`}>{o}</span>
-                  ))}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <p className="font-semibold text-white/50">💡 Dévoile les réponses une par une pour vérifier tes anecdotes, sans tout révéler d'un coup devant les invités.</p>
+          <QuizPreview questions={questions} />
           <div className="flex gap-3">
             <button onClick={generate} disabled={loading} className="btn-ghost">🔄 Régénérer</button>
             {!saved && <button onClick={save} disabled={loading} className="btn-primary flex-1">💾 Enregistrer</button>}

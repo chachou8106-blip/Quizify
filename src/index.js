@@ -7,7 +7,7 @@ import { activateLicense, reverifyAll } from './gumroad';
 import { wikiContext, spellSuggestion } from './wiki';
 import {
   fingerprintAll, drawUnseen, knownFingerprints, storeQuestions, markSeen,
-  seenAnswerKeys, unseenTracks, markTracksSeen,
+  seenAnswerKeys, unseenTracks, markTracksSeen, topicKey,
 } from './bank';
 import { exportBank } from './exportBank';
 import {
@@ -338,26 +338,36 @@ app.post('/api/ai/generate', auth, async (c) => {
   // Une question déjà présente dans la banque mondiale, ou déjà vue par ce
   // joueur, ou répétée dans le même lot, est écartée.
   let fresh = await fingerprintAll(questions || [], String(topic || ''));
-  if (!personalFacts) {
-    const fps = fresh.map((q) => q.fp);
-    const [inBank, alreadySeen, answersSeen] = await Promise.all([
-      knownFingerprints(c.env, fps),
-      seenByUser(c.env, user.id, fps),
-      seenAnswerKeys(c.env, user.id, fresh.map((q) => q.ak)),
-    ]);
+
+  // La mémoire du joueur (a-t-il déjà vu ça un autre jour ?) ne s'applique qu'aux
+  // quiz sur le monde. Un quiz d'anniversaire est bâti sur des anecdotes privées :
+  // rien à comparer avec la banque mondiale.
+  const fps = fresh.map((q) => q.fp);
+  const [inBank, alreadySeen, answersSeen] = personalFacts
+    ? [new Set(), new Set(), new Set()]
+    : await Promise.all([
+        knownFingerprints(c.env, fps),
+        seenByUser(c.env, user.id, fps),
+        seenAnswerKeys(c.env, user.id, fresh.map((q) => q.ak)),
+      ]);
+
+  // En revanche, l'interdit « jamais deux fois la même question ni la même
+  // réponse DANS UN MÊME QUIZ » s'applique à TOUT, anniversaire compris.
+  // C'est exactement le défaut qu'a subi Nicole : deux questions différentes
+  // répondant toutes les deux « Ératosthène » dans le même quiz.
+  {
     const usedFp = new Set(fromBank.map((q) => q.fp));
     const usedAk = new Set(fromBank.map((q) => q.ak).filter(Boolean));
     const kept = [];
     for (const q of fresh) {
       if (usedFp.has(q.fp) || alreadySeen.has(q.fp)) continue;
-      // Même réponse sur le même sujet = même question reformulée.
       if (q.ak && (usedAk.has(q.ak) || answersSeen.has(q.ak))) continue;
       usedFp.add(q.fp);
       if (q.ak) usedAk.add(q.ak);
       kept.push({ ...q, fromBank: inBank.has(q.fp) });
     }
     // Aucune exception : un doublon ne passe jamais, même si le quiz raccourcit.
-    // Le rattrapage en lecture profonde ci-dessous se charge de le recompléter.
+    // Les rattrapages ci-dessous se chargent de le recompléter.
     fresh = kept;
   }
 
@@ -404,6 +414,33 @@ app.post('/api/ai/generate', auth, async (c) => {
           .filter((s, i, arr) => arr.findIndex((o) => o.url === s.url) === i).slice(0, 6);
       }
     } catch { /* on rend ce qu'on a plutôt que d'échouer */ }
+  }
+
+  // Dernier filet, sans le moindre neurone : plutôt que de rendre un quiz plus
+  // court, on rouvre la banque en levant la seule contrainte négociable — « ce
+  // joueur l'a déjà vue un jour ». L'interdit absolu, lui, reste entier :
+  // jamais deux fois la même question NI la même réponse DANS UN MÊME QUIZ.
+  if (merged.length < totalWanted && !personalFacts) {
+    try {
+      const takenFp = new Set(merged.map((q) => q.fp).filter(Boolean));
+      const takenAk = new Set(merged.map((q) => q.ak).filter(Boolean));
+      const rows = await c.env.DB.prepare(
+        `SELECT fp, ak, question, options, correct, explanation, source_url, source_title
+           FROM question_bank
+          WHERE topic_key = ? AND type = ? AND language = ?
+          ORDER BY served ASC, RANDOM() LIMIT 40`
+      ).bind(topicKey(String(topic || '')), type, language).all();
+      for (const r of rows.results || []) {
+        if (merged.length >= totalWanted) break;
+        if (takenFp.has(r.fp) || (r.ak && takenAk.has(r.ak))) continue;
+        takenFp.add(r.fp); if (r.ak) takenAk.add(r.ak);
+        merged.push({
+          fp: r.fp, ak: r.ak, question: r.question, options: JSON.parse(r.options),
+          correct: r.correct, explanation: r.explanation || '',
+          sourceUrl: r.source_url || null, sourceTitle: r.source_title || null, fromBank: true,
+        });
+      }
+    } catch { /* la banque est un bonus, jamais bloquante */ }
   }
 
   questions = merged;
@@ -623,20 +660,47 @@ app.get('/api/music/blindtest', async (c) => {
 
 // ---------- quizzes ----------
 
+// Retire d'un quiz les questions répétées et celles qui refont la même réponse.
+// Les blind tests sont épargnés : plusieurs morceaux peuvent légitimement
+// partager un même artiste sans que ce soit un doublon.
+async function dedupQuiz(questions) {
+  try {
+    const marques = await fingerprintAll(questions, '');
+    const vusFp = new Set();
+    const vusAk = new Set();
+    const gardees = [];
+    for (let i = 0; i < marques.length; i++) {
+      const q = marques[i];
+      if (q.audioUrl) { gardees.push(questions[i]); continue; }
+      if (vusFp.has(q.fp) || (q.ak && vusAk.has(q.ak))) continue;
+      vusFp.add(q.fp); if (q.ak) vusAk.add(q.ak);
+      gardees.push(questions[i]);
+    }
+    return gardees.length ? gardees : questions;
+  } catch {
+    return questions;
+  }
+}
+
 app.post('/api/quizzes', auth, async (c) => {
   const user = c.get('user');
   const { title, category = 'culture', difficulty = 'medium', language = 'fr', questions, sources = null, verified = false } = await c.req.json().catch(() => ({}));
   if (!title || !Array.isArray(questions) || questions.length === 0) {
     return c.json({ error: 'Titre et questions requis' }, 400);
   }
+  // Dernier verrou avant enregistrement : quel que soit le chemin emprunté
+  // (création classique, anniversaire, blind test, quiz importé), un quiz ne
+  // peut pas contenir deux fois la même question ni deux fois la même réponse.
+  const propres = await dedupQuiz(questions);
+
   const id = randomHex(10);
   const code = shareCode();
   const emoji = CATEGORIES[category]?.emoji || '🎯';
   await c.env.DB.prepare(
     'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code, sources, verified) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-  ).bind(id, user.id, String(title).slice(0, 100), category, emoji, difficulty, language, JSON.stringify(questions), code,
+  ).bind(id, user.id, String(title).slice(0, 100), category, emoji, difficulty, language, JSON.stringify(propres), code,
     sources ? JSON.stringify(sources) : null, verified ? 1 : 0).run();
-  return c.json({ quiz: { id, title, category, emoji, share_code: code, questions, sources, verified: !!verified } }, 201);
+  return c.json({ quiz: { id, title, category, emoji, share_code: code, questions: propres, sources, verified: !!verified } }, 201);
 });
 
 app.get('/api/quizzes', auth, async (c) => {

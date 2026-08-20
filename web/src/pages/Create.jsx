@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useAuth } from '../store';
 import QuizActions from '../components/QuizActions';
 import CountPicker from '../components/CountPicker';
+import QuizPreview from '../components/QuizPreview';
 
 const TYPES = [
   { value: 'multipleChoice', label: 'QCM — 4 réponses au choix', hint: 'Le grand classique, parfait pour tout le monde.' },
@@ -34,7 +35,6 @@ export default function Create() {
   const [error, setError] = useState('');
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
-  const [hideAnswers, setHideAnswers] = useState(false);
   const [sources, setSources] = useState(null);
   const [titre, setTitre] = useState('');
   const [correction, setCorrection] = useState(null);
@@ -204,9 +204,6 @@ export default function Create() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-2xl font-extrabold">Aperçu ({questions.length} questions)</h2>
             <div className="flex gap-2">
-              <button onClick={() => setHideAnswers(!hideAnswers)} className="btn-ghost !px-4 !py-2 !text-sm">
-                {hideAnswers ? '👀 Voir les réponses' : '🙈 Masquer (je joue aussi)'}
-              </button>
               <button onClick={() => generate()} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
@@ -223,19 +220,7 @@ export default function Create() {
               </ul>
             </div>
           )}
-          <ol className="space-y-3">
-            {questions.map((q, i) => (
-              <li key={i} className="rounded-2xl bg-white/5 p-4">
-                <p className="font-bold">{i + 1}. {q.question}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {q.options.map((o, j) => (
-                    <span key={j} className={`rounded-full px-3 py-1 text-sm font-bold ${!hideAnswers && j === q.correct ? 'bg-minty-light text-emerald-900' : 'bg-white/10 text-white/60'}`}>{o}</span>
-                  ))}
-                </div>
-                {!hideAnswers && q.explanation && <p className="mt-2 text-sm font-semibold text-white/50">💡 {q.explanation}</p>}
-              </li>
-            ))}
-          </ol>
+          <QuizPreview questions={questions} />
           {!saved ? (
             <button onClick={save} disabled={loading} className="btn-pink w-full text-xl">💾 Enregistrer ce quiz</button>
           ) : (
