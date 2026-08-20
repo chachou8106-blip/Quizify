@@ -536,25 +536,37 @@ app.get('/ads.txt', (c) => {
   return c.text(`google.com, ${c.env.ADSENSE_CLIENT.replace('ca-', '')}, DIRECT, f08c47fec0942fa0\n`);
 });
 
-// Audit qualité (protégé) : génère un quiz sans quota, format compact pour relecture.
+// Audit qualité (protégé) : lance la génération en tâche de fond, résultat lisible via /api/audit/get.
 app.get('/api/audit', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const id = c.req.query('id') || randomHex(4);
   const topic = c.req.query('topic') || 'culture générale';
   const category = c.req.query('cat') || 'culture';
   const type = c.req.query('type') || 'multipleChoice';
   const count = Math.min(parseInt(c.req.query('count')) || 5, 15);
   const difficulty = c.req.query('difficulty') || 'medium';
-  try {
-    let questions;
-    if (type === 'math') questions = generateMathQuestions({ count, difficulty });
-    else if (type === 'anagram') questions = await generateAnagramQuestions(c.env, { topic, count });
-    else questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
-    return c.json({
-      questions: questions.map((q) => ({ q: q.question, ok: q.options[q.correct], opts: q.options, why: q.explanation })),
-    });
-  } catch (e) {
-    return c.json({ error: e.message }, 500);
-  }
+
+  c.executionCtx.waitUntil((async () => {
+    let payload;
+    try {
+      let questions;
+      if (type === 'math') questions = generateMathQuestions({ count, difficulty });
+      else if (type === 'anagram') questions = await generateAnagramQuestions(c.env, { topic, count });
+      else questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
+      payload = { done: true, topic, category, type, questions: questions.map((q) => ({ q: q.question, ok: q.options[q.correct], opts: q.options, why: q.explanation })) };
+    } catch (e) {
+      payload = { done: true, error: e.message };
+    }
+    await c.env.KV.put(`audit:${id}`, JSON.stringify(payload), { expirationTtl: 3600 });
+  })());
+
+  return c.json({ started: true, id });
+});
+
+app.get('/api/audit/get', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const raw = await c.env.KV.get(`audit:${c.req.query('id')}`);
+  return raw ? c.json(JSON.parse(raw)) : c.json({ done: false });
 });
 
 // Diagnostic des sources externes (Wikipédia / Wiktionnaire)
