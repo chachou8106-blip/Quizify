@@ -998,6 +998,70 @@ app.get('/api/bank/export', async (c) => {
 
 // Preuve d'absence de doublon : on crée un joueur factice, on lui fabrique DEUX
 // quiz sur le même sujet via le vrai parcours de création, et on compare.
+// ---- Atelier de préparation : fabriquer un quiz et l'enregistrer -----------
+// Sert à préparer une soirée à l'avance sans que l'animateur ait à cliquer.
+// Protégé par AUTH_SECRET. Le quiz atterrit dans le compte demandé, prêt à jouer.
+app.get('/api/prepare', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const id = c.req.query('id') || randomHex(4);
+  const email = (c.req.query('email') || '').trim().toLowerCase();
+  const topic = c.req.query('topic') || '';
+  const type = c.req.query('type') || 'multipleChoice';
+  const category = c.req.query('cat') || 'free';
+  const difficulty = c.req.query('difficulty') || 'medium';
+  const count = Math.min(Math.max(parseInt(c.req.query('count')) || 8, 1), 25);
+  const titreVoulu = c.req.query('titre') || '';
+  if (!email || !topic) return c.json({ error: 'email et topic requis' }, 400);
+
+  c.executionCtx.waitUntil((async () => {
+    let payload;
+    try {
+      const u = await c.env.DB.prepare('SELECT id, name, email FROM users WHERE email = ?').bind(email).first();
+      if (!u) throw new Error(`aucun compte pour ${email}`);
+      const token = await signJWT({ id: u.id, email: u.email, name: u.name }, await secret(c));
+
+      const gen = await app.fetch(new Request('https://prepare/api/ai/generate?force=1', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, category, type, count, difficulty, language: 'fr' }),
+      }), c.env, c.executionCtx);
+      const d = await gen.json();
+      if (!d.questions?.length) throw new Error(d.message || d.error || 'génération vide');
+
+      const save = await app.fetch(new Request('https://prepare/api/quizzes', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: titreVoulu || d.titre || topic,
+          category, difficulty, questions: d.questions,
+          sources: d.sources || null, verified: !!d.sources,
+        }),
+      }), c.env, c.executionCtx);
+      const sv = await save.json();
+      if (!sv.quiz) throw new Error(sv.message || sv.error || 'enregistrement impossible');
+
+      payload = {
+        done: true,
+        titre: sv.quiz.title,
+        lien: `/s/${sv.quiz.share_code}`,
+        questions: sv.quiz.questions.length,
+        demandees: count,
+        type,
+        apercu: sv.quiz.questions.map((q) => ({
+          q: q.question,
+          r: q.options[q.correct],
+          opts: q.options.length,
+        })),
+      };
+    } catch (e) {
+      payload = { done: true, error: e.message };
+    }
+    await c.env.KV.put(`export:${id}`, JSON.stringify(payload), { expirationTtl: 21600 });
+  })());
+
+  return c.json({ started: true, id });
+});
+
 app.get('/api/bank/selftest', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const id = c.req.query('id') || randomHex(4);
