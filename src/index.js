@@ -566,11 +566,14 @@ app.get('/api/audit', async (c) => {
   c.executionCtx.waitUntil((async () => {
     let payload;
     try {
-      let questions;
+      let questions; let srcs = null;
       if (type === 'math') questions = generateMathQuestions({ count, difficulty });
       else if (type === 'anagram') questions = await generateAnagramQuestions(c.env, { topic, count });
-      else questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
-      payload = { done: true, topic, category, type, questions: questions.map((q) => ({ q: q.question, ok: q.options[q.correct], opts: q.options, why: q.explanation })) };
+      else if (c.req.query('verified') === '1') {
+        const r = await generateVerifiedQuestions(c.env, { topic, count, difficulty, language: 'fr' });
+        questions = r.questions; srcs = r.sources;
+      } else questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
+      payload = { done: true, topic, category, type, sources: srcs, questions: questions.map((q) => ({ q: q.question, ok: q.options[q.correct], opts: q.options, why: q.explanation })) };
     } catch (e) {
       payload = { done: true, error: e.message };
     }
