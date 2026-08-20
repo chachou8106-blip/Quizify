@@ -841,6 +841,80 @@ app.get('/api/bank/export', async (c) => {
   return c.json({ started: true, id });
 });
 
+// Preuve d'absence de doublon : on crée un joueur factice, on lui fabrique DEUX
+// quiz sur le même sujet via le vrai parcours de création, et on compare.
+app.get('/api/bank/selftest', async (c) => {
+  if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
+  const id = c.req.query('id') || randomHex(4);
+  const topic = c.req.query('topic') || 'Louis XIV';
+  const type = c.req.query('type') || 'multipleChoice';
+  const count = Math.min(parseInt(c.req.query('count')) || 6, 12);
+  const uid = `selftest-${randomHex(5)}`;
+
+  c.executionCtx.waitUntil((async () => {
+    let payload;
+    try {
+      await c.env.DB.prepare(
+        "INSERT INTO users (id, email, name, pass_hash, salt, plan) VALUES (?,?,?,'x','x','premium')"
+      ).bind(uid, `${uid}@selftest.local`, 'Autotest').run();
+      const token = await signJWT({ id: uid, email: `${uid}@selftest.local`, name: 'Autotest' }, await secret(c));
+
+      const run = async () => {
+        const res = await app.fetch(new Request('https://selftest/api/ai/generate', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, type, count, difficulty: 'medium', language: 'fr' }),
+        }), c.env, c.executionCtx);
+        return res.json();
+      };
+
+      const first = await run();
+      // La mémoire du joueur s'écrit en tâche de fond : on attend qu'elle soit posée.
+      for (let i = 0; i < 20; i++) {
+        const n = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_seen WHERE user_id = ?').bind(uid).first();
+        if ((n?.n || 0) >= (first.questions?.length || 1)) break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      const second = await run();
+
+      const norm = (q) => q.question.toLowerCase().replace(/\W+/g, ' ').trim();
+      const ansNorm = (q) => String(q.options[q.correct]).toLowerCase().replace(/\W+/g, ' ').trim();
+      const set1 = new Set((first.questions || []).map(norm));
+      const ans1 = new Set((first.questions || []).map(ansNorm));
+      const repeatedQuestions = (second.questions || []).filter((q) => set1.has(norm(q))).map((q) => q.question);
+      const repeatedAnswers = (second.questions || []).filter((q) => ans1.has(ansNorm(q))).map((q) => q.options[q.correct]);
+
+      const bank = await c.env.DB.prepare('SELECT COUNT(*) AS n FROM question_bank WHERE topic_key IS NOT NULL').first();
+      payload = {
+        done: true, topic, type,
+        quiz1: (first.questions || []).length,
+        quiz2: (second.questions || []).length,
+        questionsRepetees: repeatedQuestions,
+        reponsesRepetees: repeatedAnswers,
+        verdict: repeatedQuestions.length === 0 && repeatedAnswers.length === 0
+          ? 'AUCUN DOUBLON' : 'DOUBLON DETECTE',
+        banque: bank?.n || 0,
+        exemplesQuiz2: (second.questions || []).slice(0, 3).map((q) => q.question),
+        erreurs: [first.error, second.error].filter(Boolean),
+      };
+    } catch (e) {
+      payload = { done: true, error: e.message };
+    }
+    // Ménage : le joueur factice disparaît, les questions restent dans la banque.
+    try {
+      await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM question_seen WHERE user_id = ?').bind(uid),
+        c.env.DB.prepare('DELETE FROM answer_seen WHERE user_id = ?').bind(uid),
+        c.env.DB.prepare('DELETE FROM ai_usage WHERE user_id = ?').bind(uid),
+        c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(uid),
+      ]);
+    } catch { /* sans importance */ }
+    await c.env.KV.put(`export:${id}`, JSON.stringify(payload), { expirationTtl: 3600 });
+  })());
+
+  return c.json({ started: true, id });
+});
+
 app.get('/api/bank/export/get', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const raw = await c.env.KV.get(`export:${c.req.query('id')}`);
