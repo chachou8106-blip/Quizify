@@ -319,9 +319,9 @@ app.post('/api/ai/generate', auth, async (c) => {
       if (q.ak) usedAk.add(q.ak);
       kept.push({ ...q, fromBank: inBank.has(q.fp) });
     }
-    // Garde-fou : si le filtre vide le quiz (sujet très étroit, banque déjà
-    // saturée), on préfère rendre le quiz d'origine qu'un quiz vide.
-    if (kept.length >= Math.min(3, fresh.length)) fresh = kept;
+    // Aucune exception : un doublon ne passe jamais, même si le quiz raccourcit.
+    // Le rattrapage en lecture profonde ci-dessous se charge de le recompléter.
+    fresh = kept;
   }
 
   let merged = [...fromBank, ...fresh].slice(0, totalWanted);
@@ -329,13 +329,23 @@ app.post('/api/ai/generate', auth, async (c) => {
   // Le filtre anti-doublon a raccourci le quiz : on repart chercher, mais cette
   // fois en lisant les articles EN ENTIER (pas seulement l'introduction) et en
   // interdisant explicitement les angles déjà pris.
-  if (merged.length < totalWanted && !personalFacts && VERIFIABLE_TYPES.has(type)) {
+  if (merged.length < totalWanted && !personalFacts) {
     try {
       const avoid = merged.map((q) => `${q.question} → ${q.options[q.correct]}`);
-      const more = await generateVerifiedQuestions(c.env, {
-        topic: String(topic || ''), count: (totalWanted - merged.length) + 2,
-        difficulty, language, type, deep: true, avoid,
-      });
+      const need = (totalWanted - merged.length) + 2;
+      let more;
+      if (VERIFIABLE_TYPES.has(type)) {
+        more = await generateVerifiedQuestions(c.env, {
+          topic: String(topic || ''), count: need, difficulty, language, type, deep: true, avoid,
+        });
+      } else {
+        // Styles libres : même principe, la consigne d'évitement passe par le sujet.
+        const qs = await generateQuestions(c.env, {
+          topic: `${String(topic || '')}\n\nCES QUESTIONS SONT DÉJÀ POSÉES — trouve autre chose, même pas reformulé :\n${avoid.slice(0, 20).map((a) => `- ${a}`).join('\n')}`,
+          category, type, difficulty, language, count: need, personalFacts: null,
+        });
+        more = { questions: qs, sources: null };
+      }
       const extra = await fingerprintAll(more.questions || [], String(topic || ''));
       const takenFp = new Set(merged.map((q) => q.fp));
       const takenAk = new Set(merged.map((q) => q.ak).filter(Boolean));
