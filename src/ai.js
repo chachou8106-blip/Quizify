@@ -223,6 +223,80 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
   return out;
 }
 
+// ---------- Anagrammes : l'IA choisit les MOTS, le code fait tout le reste ----------
+// (mélange réel des lettres, mot garanti complet, distracteurs par permutation → zéro erreur possible)
+
+const FALLBACK_WORDS = ['CHOCOLAT', 'PAPILLON', 'MONTAGNE', 'ORCHESTRE', 'AVENTURE', 'CARNAVAL', 'TOURNESOL', 'HORIZON', 'MYSTERE', 'FUSEE', 'PIRATE', 'TRESOR', 'GALAXIE', 'CASCADE', 'BOUSSOLE', 'LANTERNE', 'VOLCAN', 'SIRENE', 'DRAGON', 'ETOILE'];
+
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase();
+}
+
+function shuffleWord(word) {
+  const a = word.split('');
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.join('');
+}
+
+// Mélange garanti différent du mot original
+function scrambled(word, avoid = new Set()) {
+  for (let i = 0; i < 30; i++) {
+    const s = shuffleWord(word);
+    if (s !== word && !avoid.has(s)) return s;
+  }
+  return null;
+}
+
+export async function generateAnagramQuestions(env, { topic, count = 8, language = 'fr' }) {
+  const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+  let words = [];
+  try {
+    const res = await env.AI.run(MODEL, {
+      messages: [
+        { role: 'system', content: 'Tu réponds uniquement en JSON valide, sans aucun texte hors du JSON.' },
+        { role: 'user', content: `Donne EXACTEMENT ${n * 2} mots ${language === 'en' ? 'anglais' : 'français'} d'UN SEUL MOT (noms communs ou noms propres, sans espace, sans trait d'union, sans apostrophe), de 5 à 12 lettres, en rapport avec le sujet : « ${topic || 'culture générale'} ». Mots COMPLETS uniquement, jamais tronqués. Réponds UNIQUEMENT avec un tableau JSON de chaînes, ex: ["CHOCOLAT","MONTAGNE"].` },
+      ],
+      max_tokens: 1024,
+      temperature: 0.6,
+    });
+    const raw = extractJSON(extractText(res));
+    if (Array.isArray(raw)) {
+      words = raw.map((w) => stripAccents(String(w)).replace(/[^A-Z]/g, ''))
+        .filter((w) => w.length >= 5 && w.length <= 12);
+    }
+  } catch { /* on utilisera la liste de secours */ }
+  words = [...new Set(words)];
+  if (words.length < n) words = [...words, ...FALLBACK_WORDS.filter((w) => !words.includes(w))];
+
+  const out = [];
+  for (const word of words) {
+    if (out.length >= n) break;
+    const used = new Set([word]);
+    const shown = scrambled(word, used);
+    if (!shown) continue; // lettres toutes identiques etc.
+    used.add(shown);
+    const distractors = [];
+    for (let i = 0; i < 3; i++) {
+      const d = scrambled(word, used);
+      if (!d) break;
+      used.add(d);
+      distractors.push(d);
+    }
+    if (distractors.length < 3) continue;
+    const options = [word, ...distractors].sort(() => Math.random() - 0.5);
+    out.push({
+      question: `Quel est le vrai mot caché dans ces lettres : ${shown.split('').join('-')} ?`,
+      options,
+      correct: options.indexOf(word),
+      explanation: `Le mot était « ${word} ».`,
+    });
+  }
+  return out;
+}
+
 // ---------- Passe de vérification : l'IA relit et corrige le quiz avant affichage ----------
 
 async function verifyQuestions(env, questions, language) {

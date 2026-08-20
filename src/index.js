@@ -2,7 +2,7 @@
 
 import { Hono } from 'hono';
 import { hashPassword, randomHex, signJWT, requireAuth } from './auth';
-import { generateQuestions, generateMathQuestions, CATEGORIES } from './ai';
+import { generateQuestions, generateMathQuestions, generateAnagramQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
 export { GameRoom } from './GameRoom';
 
@@ -153,7 +153,11 @@ app.post('/api/ai/generate', auth, async (c) => {
       category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
-    if (total <= 12) {
+    if (type === 'anagram') {
+      // L'IA choisit les mots, le code mélange et vérifie → réponses garanties.
+      questions = await generateAnagramQuestions(c.env, { topic: baseOpts.topic, count: total, language });
+      if (questions.length === 0) throw new Error('impossible de construire les anagrammes');
+    } else if (total <= 12) {
       questions = await generateQuestions(c.env, { ...baseOpts, count: total });
     } else {
       // Gros quiz : génération par lots parallèles de 10 (fiable), puis fusion + dédoublonnage.
@@ -557,6 +561,10 @@ app.get('/api/selftest', async (c) => {
     const mq = generateMathQuestions({ count: 2, difficulty: 'medium' });
     out.math = { ok: mq.length === 2, sample: mq[0]?.question, answer: mq[0]?.options[mq[0]?.correct] };
   } catch (e) { out.math = { ok: false, error: e.message }; }
+  try {
+    const aq = await generateAnagramQuestions(c.env, { topic: 'la cuisine française', count: 2 });
+    out.anagram = { ok: aq.length === 2, sample: aq[0]?.question, answer: aq[0]?.options[aq[0]?.correct] };
+  } catch (e) { out.anagram = { ok: false, error: e.message }; }
   out.secretSource = c.env.AUTH_SECRET ? 'env' : (cachedSecret ? 'd1' : 'fallback');
   return c.json(out);
 });
