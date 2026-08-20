@@ -294,9 +294,14 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
   // et aucune mauvaise option ne doit être citée dans l'explication (signe d'ambiguïté,
   // ex. « dit le Grand ou le Roi-Soleil » où deux options seraient acceptables).
   const verified = [];
+  const usedAnswers = new Set();
   for (const q of candidates) {
     const good = q.options[q.correct];
     if (!answerSupported(good, ctxNorm)) continue;
+    // Pas deux questions différentes avec la même bonne réponse
+    const answerKey = normText(good);
+    if (usedAnswers.has(answerKey)) continue;
+    usedAnswers.add(answerKey);
     const whyNorm = normText(q.explanation || '');
     const ambiguous = q.options.some((o, i) => {
       if (i === q.correct) return false;
