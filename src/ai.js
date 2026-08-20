@@ -36,6 +36,22 @@ export const CATEGORIES = {
 
 const DIFF_LABEL = { easy: 'facile (grand public, réponses évidentes pour qui connaît un peu le sujet)', medium: 'moyen (il faut bien connaître le sujet)', hard: 'difficile (pour experts, détails pointus)' };
 
+const TYPE_RULES = {
+    trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
+    emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
+    riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
+    chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.`,
+    intru: `C'est un quiz TROUVE L'INTRUS : chaque "question" commence par "Trouve l'intrus :" suivi du thème (ex: "Trouve l'intrus : ces artistes ont tous gagné un Grammy… sauf un !"). Les 4 "options" partagent toutes un point commun SAUF une (l'intrus = la bonne réponse). L'explication révèle le point commun.`,
+    mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs), "Trouve l'intrus", citation ("Qui a dit ça ?") et "En quelle année ?". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
+    quote: `C'est un quiz QUI A DIT ÇA ? : chaque "question" est une citation ou réplique célèbre RÉELLE entre guillemets « », liée au sujet. Les 4 "options" sont des personnes/personnages plausibles ; une seule a réellement dit ou écrit cette phrase. L'explication donne le contexte de la citation.`,
+    anagram: `C'est un quiz ANAGRAMMES : chaque "question" est de la forme "Remets les lettres dans l'ordre : X-Y-Z" où les lettres MAJUSCULES séparées par des tirets sont le VRAI mélange des lettres d'un mot ou nom lié au sujet. Les 4 "options" sont des mots plausibles de longueur similaire ; une seule correspond exactement à ces lettres. Vérifie soigneusement que les lettres correspondent.`,
+    year: `C'est un quiz EN QUELLE ANNÉE ? : chaque question demande l'année précise d'un événement marquant lié au sujet (sortie d'un film, victoire, invention…). Les 4 "options" sont des années proches et crédibles (ex: "1994","1996","1998","2001") ; une seule est exacte.`,
+    math: `C'est un quiz CALCUL RAPIDE spécial soirée : chaque "question" est un petit calcul mental amusant et accessible (additions, multiplications simples, pourcentages faciles, petites énigmes numériques), si possible habillé avec le thème du sujet. 4 "options" numériques proches ; une seule correcte.`,
+    multipleChoice: `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`,
+};
+
+function buildTypeRules(type) { return TYPE_RULES[type] || TYPE_RULES.multipleChoice; }
+
 function buildPrompt({ topic, category, type, count, difficulty, language, personalFacts }) {
   const lang = language === 'en' ? 'English' : 'français';
   const cat = CATEGORIES[category]?.name || 'Culture Générale';
@@ -51,20 +67,8 @@ function buildPrompt({ topic, category, type, count, difficulty, language, perso
     subject = `Sujet du quiz : ${topic}\nCatégorie : ${cat}`;
   }
 
-  const TYPE_RULES = {
-    trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
-    emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
-    riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
-    chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.`,
-    intru: `C'est un quiz TROUVE L'INTRUS : chaque "question" commence par "Trouve l'intrus :" suivi du thème (ex: "Trouve l'intrus : ces artistes ont tous gagné un Grammy… sauf un !"). Les 4 "options" partagent toutes un point commun SAUF une (l'intrus = la bonne réponse). L'explication révèle le point commun.`,
-    mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs), "Trouve l'intrus", citation ("Qui a dit ça ?") et "En quelle année ?". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
-    quote: `C'est un quiz QUI A DIT ÇA ? : chaque "question" est une citation ou réplique célèbre RÉELLE entre guillemets « », liée au sujet. Les 4 "options" sont des personnes/personnages plausibles ; une seule a réellement dit ou écrit cette phrase. L'explication donne le contexte de la citation.`,
-    anagram: `C'est un quiz ANAGRAMMES : chaque "question" est de la forme "Remets les lettres dans l'ordre : X-Y-Z" où les lettres MAJUSCULES séparées par des tirets sont le VRAI mélange des lettres d'un mot ou nom lié au sujet. Les 4 "options" sont des mots plausibles de longueur similaire ; une seule correspond exactement à ces lettres. Vérifie soigneusement que les lettres correspondent.`,
-    year: `C'est un quiz EN QUELLE ANNÉE ? : chaque question demande l'année précise d'un événement marquant lié au sujet (sortie d'un film, victoire, invention…). Les 4 "options" sont des années proches et crédibles (ex: "1994","1996","1998","2001") ; une seule est exacte.`,
-    math: `C'est un quiz CALCUL RAPIDE spécial soirée : chaque "question" est un petit calcul mental amusant et accessible (additions, multiplications simples, pourcentages faciles, petites énigmes numériques), si possible habillé avec le thème du sujet. 4 "options" numériques proches ; une seule correcte.`,
-    multipleChoice: `Chaque question a exactement 4 options plausibles, une seule correcte. Varie la position de la bonne réponse ("correct" entre 0 et 3).`,
-  };
-  const typeRules = TYPE_RULES[type] || TYPE_RULES.multipleChoice;
+
+  const typeRules = buildTypeRules(type);
 
   return `Tu es un créateur de quiz expert et amusant. Génère EXACTEMENT ${count} questions de quiz en ${lang}.
 ${subject}
@@ -244,7 +248,7 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
 // L'IA ne puise plus dans sa mémoire : elle rédige à partir d'extraits encyclopédiques
 // réels, et chaque bonne réponse doit se retrouver dans la source, sinon la question saute.
 
-export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr' }) {
+export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice' }) {
   const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
   const sources = await wikiContext(env, topic);
   if (!sources.length) {
@@ -268,7 +272,9 @@ RÈGLES ABSOLUES :
 7. L'explication est brève (1 phrase) et s'appuie sur la source.
 Difficulté : ${diff}.
 
-Génère EXACTEMENT ${n} questions à choix multiples (4 options, une seule correcte, position variée).
+STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
+
+Génère EXACTEMENT ${n} questions (4 options, une seule correcte, position variée).
 Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b","c","d"],"correct":0,"explanation":"..."}]`;
 
   let candidates = [];

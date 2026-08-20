@@ -29,6 +29,10 @@ async function getSecret(env) {
 const secret = (c) => getSecret(c.env);
 const auth = requireAuth(secret);
 
+// Types dont la réponse peut être confrontée à une source encyclopédique.
+// (Vrai/Faux, emoji, « qui suis-je », mix : la réponse n'est pas un extrait de texte → non vérifiables)
+const VERIFIABLE_TYPES = new Set(['multipleChoice', 'year', 'quote', 'chrono', 'intru']);
+
 const FREE_AI_PER_MONTH = 3;
 const FREE_MAX_PLAYERS = 10;
 const PAID_MAX_PLAYERS = 100;
@@ -117,7 +121,7 @@ app.get('/api/categories', (c) => c.json({ categories: CATEGORIES }));
 app.post('/api/ai/generate', auth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json().catch(() => ({}));
-  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts, verified = false } = body;
+  const { topic, category = 'culture', type = 'multipleChoice', count = 5, difficulty = 'medium', language = 'fr', personalFacts, verified = true } = body;
   if (!topic && !personalFacts) return c.json({ error: 'Indique un sujet ou des anecdotes' }, 400);
 
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
@@ -155,19 +159,20 @@ app.post('/api/ai/generate', auth, async (c) => {
       category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
-    if (verified && !personalFacts) {
-      // 🎓 Mode Révision : questions ancrées dans Wikipédia et vérifiées une à une.
-      const r = await generateVerifiedQuestions(c.env, { topic: baseOpts.topic, count: total, difficulty, language });
-      questions = r.questions;
-      sources = r.sources;
-      if (questions.length === 0) {
-        return c.json({
-          error: 'no_source',
-          message: r.reason || "Aucune source encyclopédique fiable trouvée pour ce sujet. Essaie un sujet plus précis (ex : « Louis XIV », « la photosynthèse »), ou désactive le Mode Révision.",
-        }, 422);
-      }
-      if (questions.length < total) {
-        verifiedNote = `${questions.length} question(s) sur ${total} ont pu être vérifiées dans les sources — les autres ont été écartées par précaution.`;
+    const wantVerify = verified && !personalFacts && VERIFIABLE_TYPES.has(type);
+    if (wantVerify) {
+      // ✅ Vérification : questions ancrées dans Wikipédia et contrôlées une à une.
+      const r = await generateVerifiedQuestions(c.env, { topic: baseOpts.topic, count: total, difficulty, language, type });
+      if (r.questions.length > 0) {
+        questions = r.questions;
+        sources = r.sources;
+        if (questions.length < total) {
+          verifiedNote = `${questions.length} question(s) sur ${total} ont pu être confirmées dans les sources — les autres ont été écartées par précaution.`;
+        }
+      } else {
+        // Aucun article exploitable : on génère quand même, mais SANS badge « vérifié »
+        questions = await generateQuestions(c.env, { ...baseOpts, count: total });
+        verifiedNote = "⚠️ Aucune source encyclopédique n'a été trouvée pour ce sujet : ce quiz n'est PAS vérifié. Parfait pour jouer, à ne pas utiliser pour des devoirs. Essaie un sujet plus précis (ex. « Louis XIV », « la photosynthèse ») pour obtenir un quiz vérifié.";
       }
     } else if (type === 'anagram') {
       // L'IA choisit les mots, le code mélange et vérifie → réponses garanties.
@@ -204,7 +209,10 @@ app.post('/api/ai/generate', auth, async (c) => {
     ).bind(user.id, monthKey()).run();
   }
 
-  return c.json({ questions, sources, verifiedNote, verified: !!(verified && sources) });
+  const notVerifiableReason = personalFacts
+    ? 'Quiz personnalisé : les faits viennent de toi, pas d\'une encyclopédie.'
+    : (!VERIFIABLE_TYPES.has(type) ? 'Ce style de question (emoji, vrai/faux, mix…) ne peut pas être confronté à une source. Choisis « QCM » pour un quiz vérifié.' : null);
+  return c.json({ questions, sources, verifiedNote, verified: !!sources, notVerifiableReason });
 });
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------

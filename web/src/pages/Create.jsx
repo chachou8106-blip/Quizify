@@ -6,17 +6,17 @@ import QuizActions from '../components/QuizActions';
 import CountPicker from '../components/CountPicker';
 
 const TYPES = [
-  { value: 'mixed', label: '🎲 Mix surprise', hint: 'Tous les styles mélangés' },
-  { value: 'multipleChoice', label: '❓ QCM', hint: '4 options classiques' },
-  { value: 'trueFalse', label: '⚖️ Vrai / Faux', hint: 'Simple et rapide' },
-  { value: 'emoji', label: '😀 Devinette Emoji', hint: 'Devine avec des emojis' },
-  { value: 'riddle', label: '🕵️ Qui suis-je ?', hint: '3 indices progressifs' },
-  { value: 'chrono', label: '🕰️ Lequel en premier ?', hint: 'Chronologie' },
-  { value: 'intru', label: '🔍 Trouve l\'intrus', hint: 'Un ne colle pas…' },
-  { value: 'quote', label: '💬 Qui a dit ça ?', hint: 'Citations célèbres' },
-  { value: 'year', label: '📅 En quelle année ?', hint: 'Dates marquantes' },
-  { value: 'anagram', label: '🔤 Anagrammes', hint: 'Lettres mélangées' },
-  { value: 'math', label: '🧮 Calcul mental', hint: 'Réponses calculées, 100 % justes — idéal devoirs' },
+  { value: 'multipleChoice', label: '🛡️ QCM (vérifié)', hint: '4 options — réponses confrontées à Wikipédia' },
+  { value: 'year', label: '🛡️ 📅 En quelle année ?', hint: 'Dates vérifiées dans les sources' },
+  { value: 'quote', label: '🛡️ 💬 Qui a dit ça ?', hint: 'Citations vérifiées dans les sources' },
+  { value: 'chrono', label: '🛡️ 🕰️ Lequel en premier ?', hint: 'Chronologie vérifiée' },
+  { value: 'intru', label: '🛡️ 🔍 Trouve l\'intrus', hint: 'Vérifié dans les sources' },
+  { value: 'math', label: '🔒 🧮 Calcul mental', hint: 'Calculé par la machine — 100 % juste' },
+  { value: 'anagram', label: '🔒 🔤 Anagrammes', hint: 'Mots validés au dictionnaire' },
+  { value: 'mixed', label: '🎉 Mix surprise', hint: 'Tous les styles — non vérifié, pour la fête' },
+  { value: 'trueFalse', label: '🎉 Vrai / Faux', hint: 'Non vérifiable — pour la fête' },
+  { value: 'emoji', label: '🎉 Devinette Emoji', hint: 'Non vérifiable — pour la fête' },
+  { value: 'riddle', label: '🎉 Qui suis-je ?', hint: 'Non vérifiable — pour la fête' },
 ];
 
 export default function Create() {
@@ -26,7 +26,7 @@ export default function Create() {
   const [categories, setCategories] = useState({});
   const [category, setCategory] = useState(params.get('cat') || 'free');
   const [topic, setTopic] = useState('');
-  const [type, setType] = useState(params.get('type') || 'mixed');
+  const [type, setType] = useState(params.get('type') || 'multipleChoice');
   const [count, setCount] = useState(8);
   const [difficulty, setDifficulty] = useState('medium');
   const [showAllCats, setShowAllCats] = useState(false);
@@ -35,9 +35,10 @@ export default function Create() {
   const [questions, setQuestions] = useState(null);
   const [saved, setSaved] = useState(null);
   const [hideAnswers, setHideAnswers] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const [verified, setVerified] = useState(true);
   const [sources, setSources] = useState(null);
   const [note, setNote] = useState('');
+  const [whyNot, setWhyNot] = useState('');
 
   useEffect(() => {
     api('/api/categories').then((d) => setCategories(d.categories)).catch(() => {});
@@ -61,6 +62,7 @@ export default function Create() {
       setQuestions(d.questions);
       setSources(d.sources || null);
       setNote(d.verifiedNote || '');
+      setWhyNot(d.notVerifiableReason || '');
       refresh();
     } catch (e) {
       setError(e.code === 'quota' ? 'quota' : e.message);
@@ -140,6 +142,7 @@ export default function Create() {
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
             {selectedType && <p className="mt-1 text-xs font-bold text-white/50">{selectedType.hint}</p>}
+            <p className="mt-1 text-xs font-bold text-white/40">🛡️ vérifié Wikipédia · 🔒 garanti par le code · 🎉 pour la fête</p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-extrabold text-white/60">Questions</label>
@@ -155,21 +158,24 @@ export default function Create() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setVerified(!verified)}
-          className={`w-full rounded-2xl border-2 p-4 text-left transition-all ${verified ? 'border-minty bg-minty/15 tile-on' : 'border-white/15 bg-white/5 hover:border-white/35'}`}
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{verified ? '✅' : '🎓'}</span>
+        <div className={`rounded-2xl border-2 p-4 ${verified ? 'border-minty bg-minty/10' : 'border-sunny/50 bg-sunny/10'}`}>
+          <div className="flex items-start gap-3">
+            <span className="text-3xl">{verified ? '🛡️' : '🎉'}</span>
             <div className="flex-1">
-              <div className="font-display text-lg font-extrabold">Mode Révision {verified && <span className="text-minty">— activé</span>}</div>
-              <div className="text-sm font-semibold text-white/60">
-                Questions écrites à partir d'articles <b>Wikipédia</b> réels, et chaque réponse vérifiée dans la source. Idéal pour les devoirs.
+              <div className="font-display text-lg font-extrabold">
+                {verified ? 'Vérification des réponses : activée' : 'Mode fête (sans vérification)'}
               </div>
+              <div className="text-sm font-semibold text-white/65">
+                {verified
+                  ? "Les questions sont écrites à partir d'articles Wikipédia réels et chaque réponse est confrontée à sa source. Les questions douteuses sont supprimées."
+                  : "Génération libre et rapide, sans contrôle encyclopédique. À réserver aux soirées."}
+              </div>
+              <button type="button" onClick={() => setVerified(!verified)} className="mt-2 text-sm font-bold text-grape-light underline">
+                {verified ? 'Désactiver (plus rapide, pour jouer)' : '🛡️ Réactiver la vérification'}
+              </button>
             </div>
           </div>
-        </button>
+        </div>
 
         {error === 'quota' ? (
           <div className="rounded-2xl bg-sunny/15 p-4 text-center font-bold">
@@ -178,9 +184,10 @@ export default function Create() {
           </div>
         ) : error && <p className="font-bold text-cherry">{error}</p>}
         {note && <p className="rounded-2xl bg-sunny/15 p-3 font-bold">ℹ️ {note}</p>}
+        {verified && whyNot && <p className="rounded-2xl bg-sunny/15 p-3 font-bold">⚠️ {whyNot}</p>}
 
         <button onClick={generate} disabled={loading} className="btn-primary w-full text-xl">
-          {loading ? (verified ? '📚 Lecture des sources…' : '✨ L\'IA réfléchit…') : (verified ? '🎓 Générer un quiz vérifié' : '✨ Générer le quiz')}
+          {loading ? (verified ? '📚 Lecture des sources…' : '✨ L\'IA réfléchit…') : (verified ? '🛡️ Générer un quiz vérifié' : '🎉 Générer (mode fête)')}
         </button>
       </div>
 
@@ -195,6 +202,11 @@ export default function Create() {
               <button onClick={generate} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
+          {!sources && (
+            <div className="rounded-2xl border-2 border-sunny/50 bg-sunny/10 p-4">
+              <p className="font-display font-extrabold text-sunny">🎉 Quiz non vérifié — pour jouer, pas pour les devoirs</p>
+            </div>
+          )}
           {sources && (
             <div className="rounded-2xl border-2 border-minty/40 bg-minty/10 p-4">
               <p className="font-display font-extrabold text-minty">✅ Quiz vérifié — sources encyclopédiques</p>
