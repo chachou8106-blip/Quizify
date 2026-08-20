@@ -308,11 +308,54 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
     if (verified.length >= n) break;
   }
 
+  // Passe adverse : on demande explicitement quelles questions ont PLUSIEURS réponses
+  // acceptables (ex. « quelle femme fut guillotinée ? » avec 3 femmes guillotinées en options).
+  const clean = await dropAmbiguous(env, verified, context);
+
   return {
-    questions: verified,
+    questions: clean,
     sources: sources.map((s) => ({ title: s.title, url: s.url })),
     asked: n,
   };
+}
+
+// Contrôle adverse : une seule requête, tâche étroite (juger, pas se souvenir).
+async function dropAmbiguous(env, questions, context) {
+  if (questions.length === 0) return questions;
+  const list = questions.map((q, i) =>
+    `${i}. ${q.question}\n   Options : ${q.options.join(' | ')}\n   Réponse retenue : ${q.options[q.correct]}`
+  ).join('\n');
+  const prompt = `Tu contrôles la qualité d'un quiz scolaire. Voici la source de référence :
+
+${context}
+
+Voici les questions :
+${list}
+
+Signale le NUMÉRO de toute question qui présente l'un de ces défauts :
+- PLUSIEURS options pourraient être considérées comme correctes (question ambiguë) ;
+- la réponse retenue est fausse ou contestée ;
+- la question est incompréhensible ou mal orthographiée.
+Sois strict : dans le doute, signale-la.
+Réponds UNIQUEMENT avec un tableau JSON de numéros, par exemple [0,3]. Si tout est correct : [].`;
+  try {
+    const res = await env.AI.run(MODEL, {
+      messages: [
+        { role: 'system', content: 'Tu réponds uniquement par un tableau JSON de nombres.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 256,
+      temperature: 0,
+    });
+    const bad = extractJSON(extractText(res));
+    if (!Array.isArray(bad)) return questions;
+    const drop = new Set(bad.filter((x) => Number.isInteger(x)));
+    const kept = questions.filter((_, i) => !drop.has(i));
+    // Garde-fou : si le contrôleur rejette tout, on garde la version d'origine.
+    return kept.length ? kept : questions;
+  } catch {
+    return questions;
+  }
 }
 
 // ---------- Anagrammes : l'IA choisit les MOTS, le code fait tout le reste ----------
