@@ -253,7 +253,7 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
 // L'IA ne puise plus dans sa mémoire : elle rédige à partir d'extraits encyclopédiques
 // réels, et chaque bonne réponse doit se retrouver dans la source, sinon la question saute.
 
-export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice', deep = false, avoid = [] }) {
+export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice', deep = false, avoid = [], maxAttempts = 4, skipJudge = false }) {
   const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
   const sources = await wikiContext(env, topic, { deep });
   if (!sources.length) {
@@ -293,7 +293,7 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
   const DEADLINE = 38000;
 
   let candidates = [];
-  for (let attempt = 0; attempt < 4 && candidates.length < target; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts && candidates.length < target; attempt++) {
     if (attempt > 0 && Date.now() - started > DEADLINE) break;
     try {
       const extra = attempt === 0 ? '' : `\n\nATTENTION : porte ces questions sur des informations DIFFÉRENTES de celles-ci, déjà utilisées : ${candidates.slice(-12).map((c) => c.question).join(' | ')}`;
@@ -339,7 +339,7 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
 
   // Passe adverse : on demande explicitement quelles questions ont PLUSIEURS réponses
   // acceptables (ex. « quelle femme fut guillotinée ? » avec 3 femmes guillotinées en options).
-  const clean = (await dropAmbiguous(env, verified, context)).slice(0, n);
+  const clean = (skipJudge ? verified : await dropAmbiguous(env, verified, context)).slice(0, n);
 
   return {
     questions: clean,

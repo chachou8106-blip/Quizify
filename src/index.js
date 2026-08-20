@@ -228,6 +228,7 @@ app.post('/api/ai/generate', auth, async (c) => {
     }
   }
 
+  const startedAt = Date.now();
   let questions;
   let sources = null;
   try {
@@ -329,14 +330,17 @@ app.post('/api/ai/generate', auth, async (c) => {
   // Le filtre anti-doublon a raccourci le quiz : on repart chercher, mais cette
   // fois en lisant les articles EN ENTIER (pas seulement l'introduction) et en
   // interdisant explicitement les angles déjà pris.
-  if (merged.length < totalWanted && !personalFacts) {
+  // Borné en temps : mieux vaut un quiz d'une question de moins qu'une création
+  // qui n'aboutit pas. Le filtre anti-doublon, lui, ne cède jamais.
+  if (merged.length < totalWanted && !personalFacts && Date.now() - startedAt < 25000) {
     try {
       const avoid = merged.map((q) => `${q.question} → ${q.options[q.correct]}`);
       const need = (totalWanted - merged.length) + 2;
       let more;
       if (VERIFIABLE_TYPES.has(type)) {
         more = await generateVerifiedQuestions(c.env, {
-          topic: String(topic || ''), count: need, difficulty, language, type, deep: true, avoid,
+          topic: String(topic || ''), count: need, difficulty, language, type,
+          deep: true, avoid, maxAttempts: 2, skipJudge: true,
         });
       } else {
         // Styles libres : même principe, la consigne d'évitement passe par le sujet.
