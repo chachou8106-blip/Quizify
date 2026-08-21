@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { copier } from '../copie';
 import { useAuth } from '../store';
 
 export default function MyQuizzes() {
@@ -28,14 +29,23 @@ export default function MyQuizzes() {
     setQuizzes((qs) => qs.filter((q) => q.id !== id));
   };
 
-  const copy = (code) => {
-    navigator.clipboard?.writeText(`${location.origin}/s/${code}`);
+  // Troisième endroit qui copiait en silence : même correctif, avec un retour visuel.
+  const [copie, setCopie] = useState(null);
+  const copy = async (code) => {
+    const lien = `${location.origin}/s/${code}`;
+    setCopie((await copier(lien)) ? code : `echec:${lien}`);
+    setTimeout(() => setCopie(null), 4000);
   };
 
   if (!ready || !user) return null;
 
   return (
     <div className="space-y-6">
+      {typeof copie === 'string' && copie.startsWith('echec:') && (
+        <p className="card text-sm font-bold text-sunny">
+          Ton navigateur bloque la copie. Le lien : <span className="select-all underline">{copie.slice(6)}</span>
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl font-extrabold">📚 Mes quiz</h1>
         <Link to="/create" className="btn-primary !px-4 !py-2 !text-base">+ Nouveau</Link>
@@ -59,7 +69,9 @@ export default function MyQuizzes() {
             <div className="mt-4 flex flex-wrap gap-2">
               <Link to={`/play/${q.id}`} className="btn-ghost !px-3 !py-1.5 !text-sm">▶️ Solo</Link>
               <button onClick={() => hostLive(q.id)} className="btn-pink !px-3 !py-1.5 !text-sm">🎉 Live</button>
-              <button onClick={() => copy(q.share_code)} className="btn-sunny !px-3 !py-1.5 !text-sm">🔗 Lien</button>
+              <button onClick={() => copy(q.share_code)} className="btn-sunny !px-3 !py-1.5 !text-sm">
+                {copie === q.share_code ? '✅ Copié' : '🔗 Lien'}
+              </button>
               <Link to={`/studio?id=${q.id}`} className="btn-ghost !px-3 !py-1.5 !text-sm">🎬 Vidéo</Link>
             </div>
           </div>

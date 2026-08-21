@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
+import { copier } from '../copie';
 import AudioClip from '../components/AudioClip';
 import ShareButtons from '../components/ShareButtons';
 import { useAuth } from '../store';
@@ -17,6 +18,7 @@ export default function Host() {
   const [hostPlays, setHostPlays] = useState(false);
   const [myAnswer, setMyAnswer] = useState(null);
   const [monNombre, setMonNombre] = useState('');
+  const [copie, setCopie] = useState(null); // null | 'ok' | 'echec'
   const [game, setGame] = useState({ players: [] });
   const [q, setQ] = useState(null);
   const [reveal, setReveal] = useState(null);
@@ -85,7 +87,38 @@ export default function Host() {
         <div className="card border-4 border-grape">
           <p className="font-display text-xl font-extrabold text-white/60">Rejoignez sur <span className="text-grape-light">{location.host}/join</span> avec le code :</p>
           <p className="my-4 font-display text-7xl font-extrabold tracking-widest text-grape-light">{pin.slice(0, 3)} {pin.slice(3)}</p>
-          <button onClick={() => navigator.clipboard?.writeText(joinUrl)} className="btn-ghost !py-2 !text-sm">🔗 Copier le lien d'invitation</button>
+
+          {/* Le lien est TOUJOURS affiché en clair et sélectionnable : même si la
+              copie échoue (navigateur intégré, contexte non sécurisé), l'animateur
+              peut le lire et le recopier. Il ne reste jamais sans solution. */}
+          <input
+            readOnly
+            value={joinUrl}
+            onFocus={(e) => e.target.select()}
+            onClick={(e) => e.target.select()}
+            className="input mt-2 w-full text-center text-sm font-bold"
+          />
+
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={async () => setCopie((await copier(joinUrl)) ? 'ok' : 'echec')}
+              className="btn-ghost !py-2 !text-sm"
+            >
+              {copie === 'ok' ? '✅ Lien copié !' : '🔗 Copier le lien'}
+            </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`Rejoins le quiz ! ${joinUrl}`)}`}
+              target="_blank" rel="noreferrer"
+              className="btn-ghost !py-2 !text-sm"
+            >
+              💬 Envoyer sur WhatsApp
+            </a>
+          </div>
+          {copie === 'echec' && (
+            <p className="mt-2 text-sm font-bold text-sunny">
+              Ton navigateur bloque la copie — sélectionne le lien ci-dessus et copie-le à la main.
+            </p>
+          )}
         </div>
         <div className="card">
           <h2 className="font-display text-xl font-extrabold">{game.players?.length || 0} joueur(s) connecté(s) {game.maxPlayers ? `(max ${game.maxPlayers})` : ''}</h2>

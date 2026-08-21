@@ -142,6 +142,15 @@ export default function Studio() {
     if (user) api('/api/quizzes').then((d) => { setQuizzes(d.quizzes); const pre = params.get('id'); setQuizId(pre && d.quizzes.some((q) => q.id === pre) ? pre : (d.quizzes[0]?.id || '')); }).catch(() => {});
   }, [ready, user, navigate]);
 
+  // Nombre de questions réellement disponibles dans le quiz sélectionné.
+  const maxQ = Math.max(1, quizzes.find((q) => q.id === quizId)?.questionCount || 5);
+
+  // Changer de quiz ne doit pas laisser une valeur impossible (ex. 14 questions
+  // demandées sur un quiz qui n'en a que 6).
+  useEffect(() => {
+    if (nbQ > maxQ) setNbQ(maxQ);
+  }, [maxQ]); // eslint-disable-line
+
   const render = async () => {
     setError(''); setVideoUrl(null); setStatus('rendering'); setProgress(0);
     abortRef.current = false;
@@ -245,16 +254,25 @@ export default function Studio() {
             <p className="font-semibold text-white/60">Aucun quiz enregistré. <Link to="/create" className="text-grape-light underline">Crée ton premier quiz</Link> ou <Link to="/blindtest" className="text-grape-light underline">un blind test</Link> !</p>
           ) : (
             <select value={quizId} onChange={(e) => setQuizId(e.target.value)} className="input">
-              {quizzes.map((q) => <option key={q.id} value={q.id}>{q.emoji} {q.title} ({q.questionCount} questions)</option>)}
+              {quizzes.map((q) => <option key={q.id} value={q.id}>{q.emoji} {q.title} ({q.questionCount} question{q.questionCount > 1 ? 's' : ''})</option>)}
             </select>
           )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <h2 className="mb-2 font-display text-lg font-extrabold"><span className="mr-2 rounded-full bg-bubble px-3 py-0.5 text-white">2</span>Questions</h2>
+            {/* Le nombre de questions suit le quiz choisi. Il était figé à cinq :
+                impossible d'exporter un blind test de quatorze morceaux. */}
             <select value={nbQ} onChange={(e) => setNbQ(+e.target.value)} className="input">
-              {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} {n > 1 ? 'questions' : 'question'}</option>)}
+              {Array.from({ length: maxQ }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>{n} {n > 1 ? 'questions' : 'question'}</option>
+              ))}
             </select>
+            {maxQ > 5 && nbQ > 5 && (
+              <p className="mt-1 text-xs font-bold text-sunny">
+                ⏱ {Math.round((nbQ * (secondsPerQ + 2.5) + 3) / 60 * 10) / 10} min de vidéo — au-delà d'une minute, ce n'est plus un Short.
+              </p>
+            )}
           </div>
           <div>
             <h2 className="mb-2 font-display text-lg font-extrabold"><span className="mr-2 rounded-full bg-sky2 px-3 py-0.5 text-white">3</span>Temps / question</h2>
