@@ -1078,7 +1078,14 @@ app.get('/api/prepare', async (c) => {
         questions = generateMathQuestions({ count, difficulty });
       } else if (type === 'anagram') {
         questions = await generateAnagramQuestions(c.env, { topic, count, language: 'fr' });
-      } else if (VERIFIABLE_TYPES.has(type)) {
+      } else if (VERIFIABLE_TYPES.has(type) && c.req.query('mode') !== 'fete') {
+        // Mode « fête » : on n'ancre PAS les questions dans l'article
+        // encyclopédique du sujet. Un article d'encyclopédie sur « Dinosaure »
+        // parle de clades et de nomenclature : ancré dessus, le modèle ne peut
+        // produire qu'un cours de phylogénie, inutilisable en soirée.
+        // Les questions restent contrôlées — relecture factuelle, contre-épreuve
+        // à l'aveugle et filtre hors-sujet s'appliquent toujours — mais elles
+        // sortent de la connaissance générale, pas du vocabulaire d'un article.
         const r = await generateVerifiedQuestions(c.env, { topic, count, difficulty, language: 'fr', type });
         questions = r.questions;
         sources = r.sources;
