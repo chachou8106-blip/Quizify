@@ -40,6 +40,10 @@ const TYPE_RULES = {
     price: `C'est un quiz LE JUSTE PRIX : chaque question appelle une réponse CHIFFRÉE unique et vérifiable (un prix, une distance, une durée, une quantité, une population…).
 RÈGLES :
 1. L'UNITÉ doit figurer dans le texte de la question, jamais ailleurs (ex. « Combien de kilomètres séparent Paris de Marseille ? », « Combien d'habitants compte Tokyo ? »).
+1 bis. L'unité annoncée doit correspondre EXACTEMENT à l'échelle du nombre.
+   Si tu écris « en millions d'habitants », la réponse doit être 2 et non 2148271.
+   Le plus simple et le plus sûr : demande le nombre BRUT (« Combien d'habitants
+   compte Paris ? » → 2148271) et n'écris jamais « en millions » ni « en milliers ».
 2. Le champ "answer" est un NOMBRE brut, sans espace, sans symbole, sans séparateur de milliers : écris 1250000 et non « 1,25 million » ni « 1 250 000 ».
 3. N'utilise PAS de champ "options" : il n'y a pas de propositions, les joueurs devinent le nombre.
 4. Choisis des ordres de grandeur devinables en soirée, et des faits stables (pas un prix qui change chaque mois).
@@ -94,6 +98,7 @@ Difficulté : ${diff}
 ${typeRules}
 Ajoute pour chaque question une courte "explanation" (1 phrase, instructive ou drôle).
 Les questions doivent être variées, factuellement correctes, sans répétition, formulées de façon vivante.
+Pas de questions « de dictionnaire » : jamais de définition de mot, d'étymologie, de traduction latine, de nom de taxon ou de classification, ni de signification de sigle. On veut ce qu'un invité aurait envie de répondre à table.
 Pour toute notation mathématique, utilise UNIQUEMENT les symboles Unicode : ², ³, ×, ÷, √, π, ½ — jamais ^, **, ni notation LaTeX.
 Orthographe, accents et grammaire françaises impeccables.
 INTERDIT : proposer deux options qui pourraient être toutes les deux correctes (deux noms d'une même chose, deux graphies d'un même mot, une réponse contestée par les spécialistes). En cas de doute sur un fait, choisis une autre question.
@@ -314,6 +319,16 @@ RÈGLES ABSOLUES :
 5. Questions COURTES et naturelles (15 mots maximum). Ne recopie pas la phrase de la source : reformule.
 6. Orthographe, accents et grammaire irréprochables. Formulation claire pour un élève.
 7. L'explication est brève (1 phrase) et s'appuie sur la source.
+8. INTERDIT ABSOLU — les questions « de dictionnaire ». Ne demande JAMAIS :
+   la définition d'un mot, son étymologie, sa traduction latine ou grecque,
+   qui a inventé un terme scientifique, le nom d'un taxon, d'une nomenclature,
+   d'un code ou d'une classification, ni ce que signifie un sigle.
+   Les sources sont des articles d'encyclopédie : le piège est de recopier leur
+   vocabulaire au lieu de parler du SUJET. On veut des questions qu'un invité
+   pourrait avoir envie de répondre à table, pas un contrôle de vocabulaire.
+   ✗ « Quel est le terme latin pour animal ? » ✗ « Qui a créé le taxon Animalia ? »
+   ✓ « Quel animal peut dormir debout ? » ✓ « Combien de cœurs a une pieuvre ? »
+9. Chaque question doit être compréhensible SANS avoir lu la source.
 Difficulté : ${diff}.
 
 STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
