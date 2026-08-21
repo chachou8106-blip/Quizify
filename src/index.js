@@ -1023,7 +1023,11 @@ app.get('/api/bank/export', async (c) => {
 // quiz sur le même sujet via le vrai parcours de création, et on compare.
 // ---- Atelier de préparation : fabriquer un quiz et l'enregistrer -----------
 // Sert à préparer une soirée à l'avance sans que l'animateur ait à cliquer.
-// Protégé par AUTH_SECRET. Le quiz atterrit dans le compte demandé, prêt à jouer.
+//
+// Point d'attention : on appelle ici les fonctions de génération DIRECTEMENT.
+// Une première version se rappelait elle-même via app.fetch() depuis un
+// waitUntil ; comme la réponse « started » était déjà partie, le contexte de la
+// requête était détruit et la sous-requête mourait sans jamais rien écrire.
 app.get('/api/prepare', async (c) => {
   if (c.req.query('key') !== (await secret(c))) return c.json({ error: 'forbidden' }, 403);
   const id = c.req.query('id') || randomHex(4);
@@ -1039,69 +1043,70 @@ app.get('/api/prepare', async (c) => {
   c.executionCtx.waitUntil((async () => {
     let payload;
     try {
-      const u = await c.env.DB.prepare('SELECT id, name, email FROM users WHERE email = ?').bind(email).first();
+      const u = await c.env.DB.prepare('SELECT id, name FROM users WHERE email = ?').bind(email).first();
       if (!u) throw new Error(`aucun compte pour ${email}`);
-      const token = await signJWT({ id: u.id, email: u.email, name: u.name }, await secret(c));
 
-      // Blind test : les morceaux viennent du catalogue musical, pas du moteur
-      // de rédaction. Aucune unité de calcul n'est consommée.
+      let questions = [];
+      let sources = null;
+
       if (type === 'blindtest') {
-        const bt = await app.fetch(new Request(
-          `https://prepare/api/music/blindtest?themes=${encodeURIComponent(topic)}&count=${count}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        ), c.env, c.executionCtx);
-        const musique = await bt.json();
-        if (!musique.questions?.length) throw new Error(musique.error || 'aucun morceau trouvé');
-        const sauve = await app.fetch(new Request('https://prepare/api/quizzes', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: titreVoulu || `🎧 Blind test : ${topic}`,
-            category: 'blindtest', difficulty, questions: musique.questions,
-          }),
-        }), c.env, c.executionCtx);
-        const q = (await sauve.json()).quiz;
-        if (!q) throw new Error('enregistrement du blind test impossible');
-        await c.env.KV.put(`export:${id}`, JSON.stringify({
-          done: true, titre: q.title, lien: `/s/${q.share_code}`,
-          questions: q.questions.length, demandees: count, type,
-          apercu: q.questions.map((x) => ({ q: x.options[x.correct], r: '🎵', opts: x.options.length })),
-        }), { expirationTtl: 21600 });
-        return;
+        // Les morceaux viennent du catalogue musical : aucune unité consommée.
+        const themes = topic.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+        const perTheme = Math.max(20, count * 4);
+        const pools = await Promise.all(themes.map((t) => fetchThemeTracks(t, perTheme)));
+        const vus = new Set();
+        const pool = [];
+        for (const t of shuffle(pools.flat())) {
+          const k = `${t.title.toLowerCase()}|${t.artist.toLowerCase()}`;
+          if (vus.has(k)) continue;
+          vus.add(k); pool.push(t);
+        }
+        if (pool.length < 4) throw new Error('pas assez de morceaux');
+        questions = pool.slice(0, Math.min(count, pool.length)).map((track) => {
+          const nom = (x) => `${x.title} — ${x.artist}`;
+          const opts = shuffle([track, ...shuffle(pool.filter((x) => x !== track)).slice(0, 3)]).map(nom);
+          return {
+            question: '🎵 Quel est ce morceau ?',
+            options: opts,
+            correct: opts.indexOf(nom(track)),
+            explanation: `C'était « ${track.title} » de ${track.artist}.`,
+            audioUrl: track.preview,
+            artwork: track.art,
+          };
+        });
+      } else if (type === 'math') {
+        questions = generateMathQuestions({ count, difficulty });
+      } else if (type === 'anagram') {
+        questions = await generateAnagramQuestions(c.env, { topic, count, language: 'fr' });
+      } else if (VERIFIABLE_TYPES.has(type)) {
+        const r = await generateVerifiedQuestions(c.env, { topic, count, difficulty, language: 'fr', type });
+        questions = r.questions;
+        sources = r.sources;
+        if (!questions.length) {
+          questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
+        }
+      } else {
+        questions = await generateQuestions(c.env, { topic, category, type, count, difficulty, language: 'fr', personalFacts: null });
       }
+      if (!questions.length) throw new Error('génération vide');
 
-      const gen = await app.fetch(new Request('https://prepare/api/ai/generate?force=1', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, category, type, count, difficulty, language: 'fr' }),
-      }), c.env, c.executionCtx);
-      const d = await gen.json();
-      if (!d.questions?.length) throw new Error(d.message || d.error || 'génération vide');
+      // Mêmes verrous qu'une création normale : pas deux fois la même question
+      // ni la même réponse dans un quiz.
+      const propres = await dedupQuiz(questions);
 
-      const save = await app.fetch(new Request('https://prepare/api/quizzes', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: titreVoulu || d.titre || topic,
-          category, difficulty, questions: d.questions,
-          sources: d.sources || null, verified: !!d.sources,
-        }),
-      }), c.env, c.executionCtx);
-      const sv = await save.json();
-      if (!sv.quiz) throw new Error(sv.message || sv.error || 'enregistrement impossible');
+      const qid = randomHex(10);
+      const code = shareCode();
+      const emoji = CATEGORIES[category]?.emoji || '🎯';
+      const titre = (titreVoulu || topic).slice(0, 100);
+      await c.env.DB.prepare(
+        'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code, sources, verified) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+      ).bind(qid, u.id, titre, category, emoji, difficulty, 'fr', JSON.stringify(propres), code,
+        sources ? JSON.stringify(sources) : null, sources ? 1 : 0).run();
 
       payload = {
-        done: true,
-        titre: sv.quiz.title,
-        lien: `/s/${sv.quiz.share_code}`,
-        questions: sv.quiz.questions.length,
-        demandees: count,
-        type,
-        apercu: sv.quiz.questions.map((q) => ({
-          q: q.question,
-          r: q.options[q.correct],
-          opts: q.options.length,
-        })),
+        done: true, titre, lien: `/s/${code}`,
+        questions: propres.length, demandees: count, type,
+        apercu: propres.map((q) => ({ q: q.question, r: q.options[q.correct] })),
       };
     } catch (e) {
       payload = { done: true, error: e.message };
