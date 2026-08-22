@@ -40,7 +40,9 @@ export default function Join() {
       setState((s) => (s === 'form' ? 'form' : s));
       if (ev.reason) setError(ev.reason);
     };
-    ws.onerror = () => setError('Impossible de rejoindre. Vérifie le code !');
+    // Le navigateur ne transmet pas le motif d'un refus de connexion : on
+    // énumère donc les trois causes possibles plutôt que de laisser chercher.
+    ws.onerror = () => setError('Impossible de rejoindre : vérifie le code, essaie un autre pseudo (il est peut-être déjà pris), ou la partie est complète.');
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }

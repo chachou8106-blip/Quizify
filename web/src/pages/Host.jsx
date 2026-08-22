@@ -12,10 +12,13 @@ const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-white', 'bg-minty'];
 
 export default function Host() {
   const { pin } = useParams();
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const hostKey = sessionStorage.getItem(`host-${pin}`);
   const [state, setState] = useState('lobby');
-  const [hostPlays, setHostPlays] = useState(false);
+  // L'animateur joue par défaut : c'est le cas le plus fréquent en soirée, et
+  // cela lui garantit exactement le même traitement qu'aux autres joueurs.
+  const [hostPlays, setHostPlays] = useState(true);
+  const [monNom, setMonNom] = useState('Animateur');
   const [myAnswer, setMyAnswer] = useState(null);
   const [monNombre, setMonNombre] = useState('');
   const [copie, setCopie] = useState(null); // null | 'ok' | 'echec'
@@ -31,15 +34,27 @@ export default function Host() {
   const phaseRef = useRef('lobby');
 
   useEffect(() => {
-    if (!hostKey) return;
-    const ws = new WebSocket(wsUrl(pin, { role: 'host', key: hostKey }));
+    // On attend de connaître le nom du compte : le serveur inscrit l'animateur
+    // comme joueur dès la connexion, avec le nom passé ici.
+    if (!hostKey || !ready) return;
+    const nom = (user?.name || 'Animateur').trim().slice(0, 20) || 'Animateur';
+    setMonNom(nom);
+    const ws = new WebSocket(wsUrl(pin, { role: 'host', key: hostKey, name: nom }));
     wsRef.current = ws;
     ws.onerror = () => setError('Connexion impossible');
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
-      if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }
-      if (m.t === 'hostJoined') setHostPlays(true);
-      if (m.t === 'answered') setMyAnswer(m.i);
+      if (m.t === 'lobby') {
+        setGame(m);
+        // Statut restauré depuis le serveur : un rechargement de page ne fait
+        // plus perdre sa place de joueur à l'animateur.
+        setHostPlays(!!m.hostName);
+        if (m.hostName) setMonNom(m.hostName);
+        if (m.phase === 'lobby') setState('lobby');
+      }
+      if (m.t === 'hostJoined') { setHostPlays(true); setMonNom(m.name); }
+      if (m.t === 'hostLeft') setHostPlays(false);
+      if (m.t === 'answered') setMyAnswer(m.i ?? m.guess);
       if (m.t === 'question') {
         setQ(m); setReveal(null); setAnswered({ answered: 0, total: 0 }); setMyAnswer(null); setState('question');
         phaseRef.current = 'question';
@@ -65,7 +80,7 @@ export default function Host() {
       }
     };
     return () => { ws.close(); clearInterval(timerRef.current); };
-  }, [pin, hostKey]);
+  }, [pin, hostKey, ready, user?.name]);
 
   const send = (t) => wsRef.current?.send(JSON.stringify({ t }));
 
@@ -130,14 +145,23 @@ export default function Host() {
           </div>
         </div>
         {error && <p className="font-bold text-cherry">{error}</p>}
-        <button
-          onClick={() => wsRef.current?.send(JSON.stringify({ t: 'hostJoin', name: user?.name || 'Animateur' }))}
-          disabled={hostPlays}
-          className={`w-full rounded-2xl border-2 py-3 font-display text-lg font-extrabold transition-all ${hostPlays ? 'border-minty bg-minty/25 text-emerald-900' : 'border-grape/40 bg-white/10 text-grape-light hover:border-grape'}`}
-        >
-          {hostPlays ? `✅ Tu joues aussi (${user?.name || 'Animateur'}) !` : '🙋 Je joue aussi !'}
-        </button>
-        <button onClick={() => send('start')} disabled={(game.players || []).length === 0 && !hostPlays}
+        <div className={`card !py-4 ${hostPlays ? 'border-2 border-minty/60' : ''}`}>
+          <p className="font-display text-lg font-extrabold">
+            {hostPlays ? `🙋 Tu joues aussi, sous le nom « ${monNom} »` : '🎙️ Tu animes seulement, sans jouer'}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-white/55">
+            {hostPlays
+              ? 'Tu réponds depuis cet écran, avec le même chrono et les mêmes points que les autres.'
+              : 'Tu ne réponds pas et tu n’apparais pas au classement.'}
+          </p>
+          <button
+            onClick={() => wsRef.current?.send(JSON.stringify(hostPlays ? { t: 'hostLeave' } : { t: 'hostJoin', name: monNom }))}
+            className="btn-ghost mt-3 !px-4 !py-2 !text-sm"
+          >
+            {hostPlays ? '🎙️ Finalement, j’anime sans jouer' : '🙋 Finalement, je joue aussi'}
+          </button>
+        </div>
+        <button onClick={() => send('start')} disabled={(game.players || []).length === 0}
           className="btn-primary w-full text-2xl disabled:opacity-40">🚀 Lancer la partie !</button>
       </div>
     );
@@ -241,7 +265,7 @@ export default function Host() {
           </div>
         ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {(q?.options || []).map((o, i) => (
+          {(reveal.options || q?.options || []).map((o, i) => (
             <div key={i} className={`card flex items-center justify-between !py-4 font-display text-xl font-extrabold ${i === reveal.correct ? 'border-4 border-minty' : 'opacity-50'}`}>
               <span>{SHAPES[i % 4]} {o}</span>
               <span className="text-white/50">{reveal.counts[i]} vote(s)</span>
@@ -250,6 +274,21 @@ export default function Host() {
         </div>
         )}
         {reveal.explanation && <p className="card bg-sunny/15 font-bold">💡 {reveal.explanation}</p>}
+        {/* L'animateur qui joue voit son propre résultat, exactement comme un joueur. */}
+        {hostPlays && (() => {
+          const moi = reveal.leaderboard.find((p) => p.name === monNom);
+          if (!moi) return null;
+          const chiffre = reveal.bonneValeur !== null && reveal.bonneValeur !== undefined;
+          const bon = chiffre ? (reveal.propositions?.[0]?.name === monNom) : myAnswer === reveal.correct;
+          return (
+            <div className={`card !py-4 text-center ${moi.delta > 0 ? 'border-2 border-minty/60' : ''}`}>
+              <p className="font-display text-xl font-extrabold">
+                {moi.delta > 0 ? `${bon ? '✅' : '💰'} Toi : +${moi.delta} points` : '❌ Toi : raté cette fois'}
+              </p>
+              {moi.streak >= 2 && <p className="font-display font-extrabold text-orange-500">🔥 Série de {moi.streak}</p>}
+            </div>
+          );
+        })()}
         <div className="card">
           <h3 className="mb-3 font-display text-xl font-extrabold">🏆 Classement</h3>
           {reveal.leaderboard.slice(0, 5).map((p, i) => (

@@ -13,6 +13,22 @@ function estChiffree(q) {
   return Array.isArray(q?.options) && q.options.length === 1;
 }
 
+// Trouve un nom libre pour l'animateur. Un joueur a pu s'inscrire avant lui
+// sous le même prénom (ou avoir récupéré le sien après une mise en retrait) :
+// sans cela, ils partageraient une seule fiche et donc un seul score.
+function nomLibre(players, souhaite) {
+  const base = (String(souhaite || 'Animateur').trim().slice(0, 20)) || 'Animateur';
+  const pris = (n) => players[n.toLowerCase()] && !players[n.toLowerCase()].anime;
+  if (!pris(base)) return base;
+  const suffixe = `${base.slice(0, 9)} (animateur)`;
+  if (!pris(suffixe)) return suffixe;
+  for (let i = 2; i < 50; i++) {
+    const essai = `${base.slice(0, 16)} ${i}`;
+    if (!pris(essai)) return essai;
+  }
+  return `${base.slice(0, 14)} ${Date.now() % 1000}`;
+}
+
 export class GameRoom extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -62,9 +78,36 @@ export class GameRoom extends DurableObject {
       const role = url.searchParams.get('role');
       if (role === 'host') {
         if (url.searchParams.get('key') !== game.hostKey) return new Response('Interdit', { status: 403 });
+        // L'animateur EST un joueur, par défaut et dès la connexion.
+        //
+        // Avant, il fallait cliquer « je joue aussi » : sa présence dans la
+        // liste des joueurs était donc facultative et sa reconnexion la
+        // perdait. C'est exactement ce qui produisait des comportements
+        // différents entre lui et les autres (décompte des réponses, fin de
+        // question, classement). Il est maintenant inscrit comme tout le
+        // monde ; s'il préfère se contenter d'animer, il le dit explicitement
+        // et on retient son choix (`spectateur`).
+        if (!game.spectateur) {
+          const brut = (url.searchParams.get('name') || '').trim().slice(0, 20);
+          const players = (await this.ctx.storage.get('players')) || {};
+          const nom = game.hostName || nomLibre(players, brut);
+          if (!players[nom.toLowerCase()]) {
+            players[nom.toLowerCase()] = { name: nom, score: 0, answers: {}, anime: true };
+            await this.ctx.storage.put('players', players);
+          }
+          if (game.hostName !== nom) {
+            game.hostName = nom;
+            await this.ctx.storage.put('game', game);
+          }
+        }
       } else {
         const name = (url.searchParams.get('name') || '').trim().slice(0, 20);
         if (!name) return new Response('Pseudo requis', { status: 400 });
+        // Le pseudo de l'animateur est réservé : sans cela, un joueur qui porte
+        // le même prénom reprendrait sa fiche et ils partageraient un score.
+        if (game.hostName && name.toLowerCase() === game.hostName.toLowerCase()) {
+          return new Response("Ce prenom est deja pris par l'animateur, choisis-en un autre", { status: 409 });
+        }
         const players = (await this.ctx.storage.get('players')) || {};
         const isReturning = !!players[name.toLowerCase()];
         if (!isReturning && Object.keys(players).length >= game.maxPlayers) {
@@ -85,7 +128,8 @@ export class GameRoom extends DurableObject {
       });
       // Send current state to the newcomer right away
       await this.sendStateTo(server);
-      if (role !== 'host') await this.broadcastLobbyUpdate();
+      // L'animateur compte parmi les joueurs : son arrivée aussi met la liste à jour.
+      await this.broadcastLobbyUpdate();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -102,18 +146,33 @@ export class GameRoom extends DurableObject {
     if (!game) return;
 
     if (att.role === 'host') {
-      if (msg.t === 'hostJoin' && game.phase === 'lobby') {
-        // L'animateur joue aussi : il devient un joueur à part entière.
-        const name = (String(msg.name || 'Animateur').trim().slice(0, 20)) || 'Animateur';
+      // Reprendre sa place de joueur (après s'être mis en retrait, ou en cours
+      // de partie). Autorisé à tout moment : il repart simplement de son score.
+      if (msg.t === 'hostJoin') {
         const players = (await this.ctx.storage.get('players')) || {};
+        const name = game.hostName || nomLibre(players, msg.name);
         if (!players[name.toLowerCase()]) {
-          players[name.toLowerCase()] = { name, score: 0, answers: {} };
+          players[name.toLowerCase()] = { name, score: 0, answers: {}, anime: true };
           await this.ctx.storage.put('players', players);
         }
         game.hostName = name;
+        game.spectateur = false;
         await this.ctx.storage.put('game', game);
         await this.broadcastLobbyUpdate();
         ws.send(JSON.stringify({ t: 'hostJoined', name }));
+        return;
+      }
+      // Se mettre en retrait : il anime sans jouer. Sa fiche disparaît du
+      // classement et du décompte des réponses.
+      if (msg.t === 'hostLeave') {
+        const players = (await this.ctx.storage.get('players')) || {};
+        if (game.hostName) delete players[game.hostName.toLowerCase()];
+        await this.ctx.storage.put('players', players);
+        game.spectateur = true;
+        game.hostName = null;
+        await this.ctx.storage.put('game', game);
+        await this.broadcastLobbyUpdate();
+        ws.send(JSON.stringify({ t: 'hostLeft' }));
         return;
       }
       if (msg.t === 'answer' && game.hostName) {
@@ -314,18 +373,26 @@ export class GameRoom extends DurableObject {
     }
 
     const leaderboard = this.leaderboard(players, fresh.currentQ);
-    this.broadcast({
+    const message = {
       t: 'reveal',
       idx: fresh.currentQ,
       total: fresh.quiz.questions.length,
       correct: q.correct,
+      question: q.question,
+      // Les propositions voyagent avec la révélation : l'écran reste juste même
+      // pour qui se reconnecte à ce moment-là et n'a pas reçu la question.
+      options: q.options,
       explanation: q.explanation || '',
       counts,
       propositions,
       bonneValeur: estChiffree(q) ? Number(q.options[0]) : null,
       leaderboard,
       isLast: fresh.currentQ >= fresh.quiz.questions.length - 1,
-    });
+    };
+    // Conservé pour pouvoir rejouer l'écran à qui se reconnecte pendant la
+    // révélation (animateur comme joueur).
+    await this.ctx.storage.put('lastReveal', message);
+    this.broadcast(message);
   }
 
   async podium(game) {
@@ -339,7 +406,9 @@ export class GameRoom extends DurableObject {
     if (winner && game.rewardCode) {
       for (const ws of this.ctx.getWebSockets()) {
         const att = ws.deserializeAttachment() || {};
-        if (att.role === 'player' && att.name === winner.name) {
+        // L'animateur qui joue gagne son cadeau comme les autres.
+        const nom = att.role === 'host' ? game.hostName : att.name;
+        if (nom && nom === winner.name) {
           try { ws.send(JSON.stringify({ t: 'reward', code: game.rewardCode, credits: 3 })); } catch {}
         }
       }
@@ -358,33 +427,36 @@ export class GameRoom extends DurableObject {
       .slice(0, 50);
   }
 
-  async broadcastLobbyUpdate() {
-    const game = await this.ctx.storage.get('game');
-    const players = (await this.ctx.storage.get('players')) || {};
-    if (!game) return;
-    this.broadcast({
+  etatLobby(game, players) {
+    return {
       t: 'lobby',
       phase: game.phase,
       title: game.quiz.title,
       players: Object.values(players).map((p) => p.name),
       maxPlayers: game.maxPlayers,
       total: game.quiz.questions.length,
-    });
+      // L'animateur retrouve son statut de joueur après un rechargement de page
+      // ou une mise en veille du téléphone, au lieu de le perdre en silence.
+      hostName: game.hostName || null,
+    };
+  }
+
+  async broadcastLobbyUpdate() {
+    const game = await this.ctx.storage.get('game');
+    const players = (await this.ctx.storage.get('players')) || {};
+    if (!game) return;
+    this.broadcast(this.etatLobby(game, players));
   }
 
   async sendStateTo(ws) {
     const game = await this.ctx.storage.get('game');
     const players = (await this.ctx.storage.get('players')) || {};
     if (!game) return;
-    const base = {
-      t: 'lobby',
-      phase: game.phase,
-      title: game.quiz.title,
-      players: Object.values(players).map((p) => p.name),
-      maxPlayers: game.maxPlayers,
-      total: game.quiz.questions.length,
-    };
-    ws.send(JSON.stringify(base));
+    ws.send(JSON.stringify(this.etatLobby(game, players)));
+
+    // Toute reconnexion — animateur comme joueur — doit retomber sur l'écran en
+    // cours. Auparavant, seule la phase « question » était rejouée : recharger
+    // pendant une révélation renvoyait au salon d'attente.
     if (game.phase === 'question') {
       const q = game.quiz.questions[game.currentQ];
       ws.send(JSON.stringify({
@@ -392,6 +464,18 @@ export class GameRoom extends DurableObject {
         question: q.question, options: q.options, audioUrl: q.audioUrl || null,
         seconds: QUESTION_SECONDS, endsAt: game.qEnd,
       }));
+      // On lui rappelle ce qu'il avait déjà répondu, pour ne pas lui laisser
+      // croire qu'il peut répondre une seconde fois.
+      const att = ws.deserializeAttachment() || {};
+      const nom = att.role === 'host' ? game.hostName : att.name;
+      const moi = nom ? players[String(nom).toLowerCase()] : null;
+      const a = moi?.answers?.[game.currentQ];
+      if (a) ws.send(JSON.stringify({ t: 'answered', i: a.i, guess: a.guess }));
+    } else if (game.phase === 'reveal') {
+      const dernier = await this.ctx.storage.get('lastReveal');
+      if (dernier) ws.send(JSON.stringify(dernier));
+    } else if (game.phase === 'podium') {
+      ws.send(JSON.stringify({ t: 'podium', leaderboard: this.leaderboard(players), title: game.quiz.title }));
     }
   }
 
