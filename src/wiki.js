@@ -27,6 +27,61 @@ export function normText(s) {
 // `deep` : au lieu de la seule introduction, on lit l'article en entier et on
 // va chercher davantage d'articles liés. C'est ce qui permet de continuer à
 // produire des questions inédites sur un sujet déjà largement exploité.
+
+// --- Tri des résultats de recherche par pertinence du TITRE ---------------
+// Distance d'édition bornée : sert à rattraper une faute de frappe
+// (« mickael » vs « michael ») sans accepter n'importe quoi.
+function distance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length];
+}
+
+// Les mots vides faussaient le score : sur « les années 90 », le « les » comptait
+// pour la moitié de la note et faisait chuter l'article « Années 1990 », pendant
+// qu'un titre contenant « des » décrochait un faux point par ressemblance.
+const VIDES = new Set([
+  'le', 'la', 'les', 'un', 'une', 'des', 'du', 'de', 'au', 'aux', 'et', 'ou',
+  'en', 'sur', 'sous', 'dans', 'par', 'pour', 'avec', 'the', 'of', 'and',
+]);
+
+function motsUtiles(s, retirerVides = false) {
+  return normText(s).split(' ')
+    .filter((m) => m.length >= 2 && (!retirerVides || !VIDES.has(m)));
+}
+
+// Part des mots du sujet que l'on retrouve dans le titre (à une faute près).
+function pertinence(titre, sujet) {
+  const cherches = motsUtiles(sujet, true);
+  if (!cherches.length) return 0;
+  const presents = motsUtiles(titre);
+  let trouves = 0;
+  for (const c of cherches) {
+    // La tolérance aux fautes ne s'applique qu'aux mots assez longs : sur trois
+    // lettres, « les » et « des » seraient considérés comme identiques.
+    const seuil = c.length >= 7 ? 2 : c.length >= 5 ? 1 : 0;
+    if (presents.some((p) => p === c || (seuil > 0 && distance(p, c) <= seuil))) trouves++;
+  }
+  return trouves / cherches.length;
+}
+
+function trierParPertinence(titres, sujet) {
+  const notes = titres.map((t) => ({ t, n: pertinence(t, sujet) }));
+  const meilleure = Math.max(...notes.map((x) => x.n));
+  // Un titre correspond vraiment au sujet : on écarte tout le hors-sujet.
+  // Sinon (sujet large comme « les années 90 »), on garde l'ordre d'origine.
+  if (meilleure < 0.6) return [];
+  return notes.filter((x) => x.n >= Math.min(0.6, meilleure))
+    .sort((a, b) => b.n - a.n)
+    .map((x) => x.t);
+}
+
 export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000, deep = false } = {}) {
   if (deep) { maxArticles = 6; chars = 7000; }
   const key = `wiki:${deep ? 'deep:' : ''}${normText(topic).slice(0, 80)}`;
@@ -35,12 +90,22 @@ export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000, d
     if (hit) return JSON.parse(hit);
   } catch { /* cache indisponible */ }
 
+  // On demande plus de résultats que nécessaire pour pouvoir TRIER ensuite.
   const search = await wapi('fr.wikipedia.org', {
     action: 'query', list: 'search', srsearch: topic,
-    srlimit: String(maxArticles), srnamespace: '0',
+    srlimit: String(Math.max(maxArticles * 3, 12)), srnamespace: '0',
   });
-  const titles = (search?.query?.search || []).map((s) => s.title).slice(0, maxArticles);
-  if (!titles.length) return [];
+  const bruts = (search?.query?.search || []).map((s) => s.title);
+  if (!bruts.length) return [];
+
+  // Le tri est indispensable. La recherche plein texte remonte tout article
+  // CONTENANT les mots cherchés. « Mickael Jackson » — orthographe fréquente en
+  // français — ramenait ainsi des articles de rap sans rapport, parce que
+  // « Mickaël » est un prénom courant. En lecture profonde, six articles de
+  // 7 000 caractères noyaient complètement le bon. Résultat vécu : un quiz
+  // demandé sur Michael Jackson est ressorti sur 50 Cent.
+  const titres = trierParPertinence(bruts, topic).slice(0, maxArticles);
+  const titles = titres.length ? titres : bruts.slice(0, maxArticles);
 
   const data = await wapi('fr.wikipedia.org', {
     action: 'query', prop: 'extracts', explaintext: '1',

@@ -410,7 +410,17 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
 
   // Passe adverse : on demande explicitement quelles questions ont PLUSIEURS réponses
   // acceptables (ex. « quelle femme fut guillotinée ? » avec 3 femmes guillotinées en options).
-  const clean = (skipJudge ? verified : await dropAmbiguous(env, verified, context)).slice(0, n);
+  let clean = (skipJudge ? verified : await dropAmbiguous(env, verified, context)).slice(0, n);
+
+  // Dernier garde-fou : les questions parlent-elles bien du sujet DEMANDÉ ?
+  // Ce contrôle n'existait que sur le chemin libre ; le QCM vérifié — le style
+  // par défaut — n'en avait aucun. Si la recherche documentaire dérivait, plus
+  // rien ne le rattrapait : un quiz demandé sur Michael Jackson pouvait sortir
+  // sur 50 Cent sans qu'aucune alerte ne se déclenche.
+  if (!skipJudge && clean.length > 1) {
+    const surSujet = await dropOffTopic(env, clean, topic);
+    if (surSujet.length > 0) clean = surSujet;
+  }
 
   return {
     questions: clean,
