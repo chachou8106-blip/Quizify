@@ -3,7 +3,9 @@
 
 import { DurableObject } from 'cloudflare:workers';
 
-const QUESTION_SECONDS = 20;
+// 15 secondes : c'est le temps annoncé partout dans l'application. Le code
+// tournait à 20, ce qui rendait la promesse fausse.
+const QUESTION_SECONDS = 15;
 
 // Une question à une seule option est une question « juste prix » : il n'y a
 // pas de propositions à choisir, la bonne réponse est le nombre lui-même.
@@ -35,6 +37,7 @@ export class GameRoom extends DurableObject {
       });
       await this.ctx.storage.put('players', {});
       // Auto-cleanup after 6h
+      await this.ctx.storage.put('expireLe', Date.now() + 6 * 3600 * 1000);
       await this.ctx.storage.setAlarm(Date.now() + 6 * 3600 * 1000);
       return Response.json({ ok: true });
     }
@@ -162,7 +165,6 @@ export class GameRoom extends DurableObject {
       const tousLes = Object.keys(players).length;
       const ontRepondu = Object.values(players).filter((pl) => pl.answers[qIdx] !== undefined).length;
       this.broadcast({ t: 'answerCount', answered: ontRepondu, total: tousLes }, 'host');
-      if (ontRepondu >= tousLes) await this.reveal(game);
       return;
     }
 
@@ -170,11 +172,22 @@ export class GameRoom extends DurableObject {
     if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
     let points = 0;
     if (i === q.correct) {
-      // Speed points + streak bonus (combo of consecutive correct answers)
       p.streak = (p.streak || 0) + 1;
-      const speed = Math.round(500 + 500 * Math.max(0, 1 - elapsed / duration));
+      // Répartition 700 / 300 entre le savoir et la vitesse.
+      //
+      // Avant, la vitesse pesait pour moitié (500 + 500) : répondre juste au
+      // bout de 15 secondes rapportait deux fois moins que répondre juste
+      // instantanément. Dans une soirée de famille, cela revenait à classer les
+      // grands-parents et les enfants par leur temps de réaction plutôt que par
+      // ce qu'ils savent. La vitesse départage encore, mais ne domine plus.
+      //
+      // Les deux premières secondes ne sont pas décomptées : le temps de lire
+      // la question ne doit pas être compté comme de l'hésitation.
+      const reflexion = Math.max(0, elapsed - 2000);
+      const utile = Math.max(1, duration - 2000);
+      const vitesse = Math.round(300 * Math.max(0, 1 - reflexion / utile));
       const bonus = Math.min((p.streak - 1) * 50, 200);
-      points = speed + bonus;
+      points = 700 + vitesse + bonus;
     } else {
       p.streak = 0;
     }
@@ -184,11 +197,17 @@ export class GameRoom extends DurableObject {
     await this.ctx.storage.put('players', players);
     try { ws.send(JSON.stringify({ t: 'answered', i })); } catch {}
 
-    // Notify host of answer count; auto-reveal when everyone answered
+    // On informe l'animateur du décompte, SANS révéler automatiquement.
+    //
+    // L'ancien code révélait dès que « tous les joueurs enregistrés » avaient
+    // répondu. Or l'animateur n'est compté parmi eux que s'il a cliqué « je joue
+    // aussi ». À deux, si l'animateur ne jouait pas, le total valait 1 : la
+    // première réponse mettait fin à la question sur-le-champ et coupait tout le
+    // monde. C'est le chronomètre qui décide désormais, ou l'animateur avec son
+    // bouton « Révéler ».
     const total = Object.keys(players).length;
     const answered = Object.values(players).filter((pl) => pl.answers[qIdx] !== undefined).length;
     this.broadcast({ t: 'answerCount', answered, total }, 'host');
-    if (answered >= total) await this.reveal(game);
   }
 
   async webSocketClose(ws) {
@@ -202,7 +221,26 @@ export class GameRoom extends DurableObject {
   }
 
   async alarm() {
-    // Room expiry: close everything and wipe storage
+    // L'alarme sert à deux choses : terminer une question dont le temps est
+    // écoulé, et fermer la partie au bout de six heures.
+    //
+    // Le filet de sécurité sur la question compte : jusqu'ici, la fin du temps
+    // était déclenchée par la page de l'animateur. Si son téléphone se met en
+    // veille ou qu'il change d'onglet, la question restait figée indéfiniment.
+    const game = await this.ctx.storage.get('game');
+    if (game && game.phase === 'question' && Date.now() >= game.qEnd - 250) {
+      await this.reveal(game);
+      const expireLe = (await this.ctx.storage.get('expireLe')) || Date.now() + 6 * 3600 * 1000;
+      await this.ctx.storage.setAlarm(expireLe);
+      return;
+    }
+
+    const expireLe = await this.ctx.storage.get('expireLe');
+    if (expireLe && Date.now() < expireLe - 250) {
+      await this.ctx.storage.setAlarm(expireLe);
+      return;
+    }
+
     for (const ws of this.ctx.getWebSockets()) {
       try { ws.close(1000, 'Partie expirée'); } catch {}
     }
@@ -218,6 +256,9 @@ export class GameRoom extends DurableObject {
     game.qStart = Date.now();
     game.qEnd = game.qStart + QUESTION_SECONDS * 1000;
     await this.ctx.storage.put('game', game);
+    // Filet de sécurité serveur : la question se terminera même si l'écran de
+    // l'animateur est en veille.
+    await this.ctx.storage.setAlarm(game.qEnd + 1500);
     this.broadcast({
       t: 'question',
       idx,
