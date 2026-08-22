@@ -374,7 +374,24 @@ Réponds UNIQUEMENT avec un tableau JSON : [{"question":"...","options":["a","b"
   const usedAnswers = new Set();
   for (const q of candidates) {
     const good = q.options[q.correct];
-    if (!answerSupported(good, ctxNorm)) continue;
+
+    // « Trouve l'intrus » raisonne À L'ENVERS des autres styles : la bonne
+    // réponse est justement l'élément ÉTRANGER au sujet. Exiger qu'elle figure
+    // dans la source était une contradiction — sur un article Harry Potter,
+    // l'intrus (« Frodon ») n'y est évidemment pas, donc tout était rejeté et
+    // le quiz se réduisait à une question.
+    //
+    // Le contrôle utile est inversé : ce sont les TROIS AUTRES options qui
+    // doivent appartenir au sujet, et l'intrus qui ne doit pas s'y trouver.
+    if (type === 'intru') {
+      const autres = q.options.filter((_, i) => i !== q.correct);
+      const appartiennent = autres.filter((o) => answerSupported(o, ctxNorm)).length;
+      // Au moins deux des trois doivent être attestées, et l'intrus absent.
+      if (appartiennent < 2) continue;
+      if (answerSupported(good, ctxNorm)) continue;
+    } else if (!answerSupported(good, ctxNorm)) {
+      continue;
+    }
     // Pas deux questions différentes avec la même bonne réponse
     const answerKey = normText(good);
     if (usedAnswers.has(answerKey)) continue;
