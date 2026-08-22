@@ -271,11 +271,54 @@ app.post('/api/ai/generate', auth, async (c) => {
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
     if (!personalFacts && VERIFIABLE_TYPES.has(type)) {
-      // Contrôle complet : questions ancrées dans des articles réels et vérifiées une à une.
-      const r = await generateVerifiedQuestions(c.env, { topic: baseOpts.topic, count: total, difficulty, language, type });
-      if (r.questions.length > 0) {
-        questions = r.questions;
-        sources = r.sources;
+      // Contrôle complet : questions ancrées dans des articles réels, vérifiées
+      // une à une.
+      //
+      // Les gros quiz se produisent par VAGUES. Un appel unique demandait au
+      // mieux 20 questions au modèle, puis le filtre en écartait la majorité :
+      // demander 40 questions en rendait parfois une seule. Chaque vague reçoit
+      // la liste de ce qui est déjà pris, pour ne pas refaire la même chose.
+      const parVague = 10;
+      const accumulees = [];
+      let sourcesVues = null;
+      const debutVagues = Date.now();
+
+      for (let vague = 0; accumulees.length < total && vague < 5; vague++) {
+        // Budget de temps : mieux vaut rendre 30 questions que faire patienter
+        // trois minutes pour en obtenir 40.
+        if (vague > 0 && Date.now() - debutVagues > 70000) break;
+        const reste = total - accumulees.length;
+        const r = await generateVerifiedQuestions(c.env, {
+          topic: baseOpts.topic,
+          count: Math.min(parVague, reste + 2),
+          difficulty, language, type,
+          deep: true,
+          avoid: accumulees.map((q) => `${q.question} → ${q.options[q.correct]}`),
+          maxAttempts: 2,
+          skipJudge: vague > 0,
+        });
+        if (!r.questions.length) break;
+        if (!sourcesVues && r.sources?.length) sourcesVues = r.sources;
+        // Dédoublonnage entre vagues : ni la même question, ni la même réponse.
+        const dejaQ = new Set(accumulees.map((q) => q.question.toLowerCase().replace(/\W+/g, ' ').trim()));
+        const dejaR = new Set(accumulees.map((q) => String(q.options[q.correct]).toLowerCase().trim()));
+        let ajoutees = 0;
+        for (const q of r.questions) {
+          if (accumulees.length >= total) break;
+          const cleQ = q.question.toLowerCase().replace(/\W+/g, ' ').trim();
+          const cleR = String(q.options[q.correct]).toLowerCase().trim();
+          if (dejaQ.has(cleQ) || dejaR.has(cleR)) continue;
+          dejaQ.add(cleQ); dejaR.add(cleR);
+          accumulees.push(q);
+          ajoutees++;
+        }
+        // Une vague qui n'apporte plus rien signale un sujet épuisé.
+        if (ajoutees === 0) break;
+      }
+
+      if (accumulees.length > 0) {
+        questions = accumulees;
+        sources = sourcesVues;
       } else {
         // Aucun article exploitable : on documente quand même le sujet avant d'écrire.
         const ctx = await wikiContext(c.env, baseOpts.topic).catch(() => []);
@@ -459,15 +502,32 @@ app.post('/api/ai/generate', auth, async (c) => {
     })());
   }
 
-  if (useBonus) {
-    await c.env.DB.prepare('UPDATE users SET bonus_ai = MAX(0, bonus_ai - 1) WHERE id = ?').bind(user.id).run();
-  } else {
-    await c.env.DB.prepare(
-      'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
-    ).bind(user.id, monthKey()).run();
+  // On ne facture pas une génération qui n'a pas tenu sa promesse. Rendre 1
+  // question sur 40 ET décompter un crédit, c'est la double peine.
+  const aTenuSaPromesse = questions.length >= Math.ceil(totalWanted / 2);
+  if (aTenuSaPromesse) {
+    if (useBonus) {
+      await c.env.DB.prepare('UPDATE users SET bonus_ai = MAX(0, bonus_ai - 1) WHERE id = ?').bind(user.id).run();
+    } else {
+      await c.env.DB.prepare(
+        'INSERT INTO ai_usage (user_id, month, count) VALUES (?,?,1) ON CONFLICT(user_id, month) DO UPDATE SET count = count + 1'
+      ).bind(user.id, monthKey()).run();
+    }
   }
 
+  // Et on le DIT quand le compte n'y est pas, au lieu de laisser croire que
+  // c'est normal.
+  const manque = totalWanted - questions.length;
+  const alerte = manque > 0
+    ? `Tu as demandé ${totalWanted} questions, ce sujet n'en a permis que ${questions.length}. `
+      + (questions.length < 5
+        ? 'Essaie un sujet plus large, ou un sujet différent.'
+        : 'Les questions douteuses ou répétées ont été écartées. Tu peux relancer pour en obtenir d\'autres.')
+    : null;
+
   return c.json({
+    alerte,
+    demandees: totalWanted,
     questions: questions.map(stripInternal),
     sources,
     verified: true,

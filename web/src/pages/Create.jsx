@@ -39,6 +39,7 @@ export default function Create() {
   const [sources, setSources] = useState(null);
   const [titre, setTitre] = useState('');
   const [correction, setCorrection] = useState(null);
+  const [alerte, setAlerte] = useState('');
 
   useEffect(() => {
     api('/api/categories').then((d) => setCategories(d.categories)).catch(() => {});
@@ -54,7 +55,7 @@ export default function Create() {
   // `force` = on passe outre la proposition de correction orthographique.
   const generate = async (sujet = topic, force = false) => {
     if (!String(sujet).trim()) { setError('Décris le sujet de ton quiz ✍️'); return; }
-    setLoading(true); setError(''); setSaved(null); setCorrection(null);
+    setLoading(true); setError(''); setSaved(null); setCorrection(null); setAlerte('');
     try {
       const d = await api(`/api/ai/generate${force ? '?force=1' : ''}`, {
         method: 'POST',
@@ -63,6 +64,7 @@ export default function Create() {
       setQuestions(d.questions);
       setSources(d.sources || null);
       setTitre(d.titre || String(sujet).trim());
+      setAlerte(d.alerte || '');
       refresh();
     } catch (e) {
       // Le sujet ressemble à une faute de frappe : on propose la correction
@@ -203,11 +205,20 @@ export default function Create() {
       {questions && (
         <div className="card space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-2xl font-extrabold">Aperçu ({questions.length} questions)</h2>
+            <h2 className="font-display text-2xl font-extrabold">Aperçu ({questions.length} question{questions.length > 1 ? 's' : ''})</h2>
             <div className="flex gap-2">
               <button onClick={() => generate()} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
+          {alerte && (
+            <div className="rounded-2xl border-2 border-sunny/60 bg-sunny/10 p-4">
+              <p className="font-display font-extrabold text-sunny">⚠️ Moins de questions que prévu</p>
+              <p className="mt-1 font-semibold text-white/70">{alerte}</p>
+              <button onClick={() => generate(topic, true)} disabled={loading} className="btn-ghost mt-3 !px-4 !py-2 !text-sm">
+                🔄 Relancer pour en obtenir plus
+              </button>
+            </div>
+          )}
           {sources && sources.length > 0 && (
             <div className="rounded-2xl border-2 border-minty/40 bg-minty/10 p-4">
               <p className="font-display font-extrabold text-minty">📚 Pour aller plus loin</p>

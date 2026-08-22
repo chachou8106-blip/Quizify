@@ -294,7 +294,12 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
 
 export async function generateVerifiedQuestions(env, { topic, count = 8, difficulty = 'medium', language = 'fr', type = 'multipleChoice', deep = false, avoid = [], maxAttempts = 4, skipJudge = false }) {
   const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
-  const sources = await wikiContext(env, topic, { deep });
+  // Au-delà d'une dizaine de questions, l'introduction d'un article ne suffit
+  // plus : la réponse doit APPARAÎTRE dans la source pour être retenue, et un
+  // texte de 2 000 caractères n'en contient qu'une poignée. On lit donc
+  // l'article en entier d'emblée pour les gros quiz.
+  const lectureProfonde = deep || n > 10;
+  const sources = await wikiContext(env, topic, { deep: lectureProfonde });
   if (!sources.length) {
     return { questions: [], sources: [], reason: 'Aucun article Wikipédia trouvé pour ce sujet.' };
   }
@@ -304,7 +309,7 @@ export async function generateVerifiedQuestions(env, { topic, count = 8, difficu
 
   // On demande volontairement PLUS de questions que nécessaire : le filtre de vérification
   // en écarte une partie, et l'utilisateur doit malgré tout recevoir le nombre demandé.
-  const perBatch = Math.min(Math.ceil(n * 1.7) + 2, 18);
+  const perBatch = Math.min(Math.ceil(n * 1.7) + 2, 20);
   const target = Math.ceil(n * 1.7) + 2;
 
   const prompt = `Tu rédiges un quiz SCOLAIRE en ${language === 'en' ? 'anglais' : 'français'} à partir de sources encyclopédiques vérifiées (Wikipédia).
