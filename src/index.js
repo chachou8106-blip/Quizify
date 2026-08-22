@@ -209,7 +209,10 @@ app.post('/api/ai/generate', auth, async (c) => {
   // Calcul mental : généré par du code (réponses garanties justes), gratuit et illimité.
   // On en fabrique plus que nécessaire et on écarte ce que ce joueur a déjà vu.
   if (type === 'math') {
-    const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+    // Plafond aligné sur le reste de l'application : le sélecteur propose jusqu'à
+    // 40, il serait mensonger d'en rendre 20. Le calcul est produit par du code,
+    // donc en fabriquer davantage ne coûte rien.
+    const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
     // En calcul, deux questions différentes tombent souvent sur le même résultat :
     // on ne filtre donc que sur la question elle-même, jamais sur la réponse.
     const pool = (await fingerprintAll(generateMathQuestions({ count: n * 4, difficulty })))
@@ -228,7 +231,13 @@ app.post('/api/ai/generate', auth, async (c) => {
       await storeQuestions(c.env, questions, { category: 'education', topic: 'calcul mental', type, difficulty, language });
       await markSeen(c.env, user.id, questions);
     })());
-    return c.json({ questions: questions.map(stripInternal) });
+    return c.json({
+      questions: questions.map(stripInternal),
+      demandees: n,
+      alerte: questions.length < n
+        ? `Tu as demandé ${n} questions, ${questions.length} ont pu être produites sans répétition.`
+        : null,
+    });
   }
 
   // ---- La banque d'abord : des questions inédites, sans rien consommer ------

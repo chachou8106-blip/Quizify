@@ -469,7 +469,8 @@ function scrambled(word, avoid = new Set()) {
 }
 
 export async function generateAnagramQuestions(env, { topic, count = 8, language = 'fr' }) {
-  const n = Math.min(Math.max(parseInt(count) || 8, 1), 20);
+  // Aligné sur le plafond général de l'application (40), au lieu de 20.
+  const n = Math.min(Math.max(parseInt(count) || 8, 1), 40);
   let raw = [];
   try {
     const res = await env.AI.run(MODEL, {
