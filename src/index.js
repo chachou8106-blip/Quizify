@@ -831,6 +831,25 @@ function shuffle(a) {
   return a;
 }
 
+// Construit les questions d'un blind test à partir d'un vivier de morceaux.
+// Partagé par le blind test, la création de quiz et le banc d'essai : une
+// seule version du code, donc une seule chose à vérifier.
+function construireBlindTest(pool, reponses) {
+  const label = (t) => `${t.title} — ${t.artist}`;
+  return reponses.map((track) => {
+    const leurres = shuffle(pool.filter((t) => t !== track)).slice(0, 3);
+    const options = shuffle([track, ...leurres]).map(label);
+    return {
+      question: '🎵 Quel est ce morceau ?',
+      options,
+      correct: options.indexOf(label(track)),
+      explanation: `C'était « ${track.title} » de ${track.artist}.`,
+      audioUrl: track.preview,
+      artwork: track.art,
+    };
+  });
+}
+
 app.get('/api/music/preview/dz/:id', async (c) => {
   const id = c.req.param('id');
   if (!/^\d+$/.test(id)) return c.json({ error: 'invalid id' }, 400);
@@ -889,19 +908,7 @@ app.get('/api/music/blindtest', async (c) => {
   const ordered = player ? await unseenTracks(c.env, player.id, pool, count) : pool;
 
   const answers = ordered.slice(0, Math.min(count, ordered.length));
-  const questions = answers.map((track) => {
-    const label = (t) => `${t.title} — ${t.artist}`;
-    const distractors = shuffle(pool.filter((t) => t !== track)).slice(0, 3);
-    const options = shuffle([track, ...distractors]).map(label);
-    return {
-      question: '🎵 Quel est ce morceau ?',
-      options,
-      correct: options.indexOf(label(track)),
-      explanation: `C'était « ${track.title} » de ${track.artist}.`,
-      audioUrl: track.preview,
-      artwork: track.art,
-    };
-  });
+  const questions = construireBlindTest(pool, answers);
   if (player) c.executionCtx.waitUntil(markTracksSeen(c.env, player.id, answers));
   return c.json({ questions });
 });
@@ -1288,18 +1295,7 @@ app.get('/api/prepare', async (c) => {
           vus.add(k); pool.push(t);
         }
         if (pool.length < 4) throw new Error('pas assez de morceaux');
-        questions = pool.slice(0, Math.min(count, pool.length)).map((track) => {
-          const nom = (x) => `${x.title} — ${x.artist}`;
-          const opts = shuffle([track, ...shuffle(pool.filter((x) => x !== track)).slice(0, 3)]).map(nom);
-          return {
-            question: '🎵 Quel est ce morceau ?',
-            options: opts,
-            correct: opts.indexOf(nom(track)),
-            explanation: `C'était « ${track.title} » de ${track.artist}.`,
-            audioUrl: track.preview,
-            artwork: track.art,
-          };
-        });
+        questions = construireBlindTest(pool, pool.slice(0, Math.min(count, pool.length)));
       } else if (type === 'math') {
         questions = generateMathQuestions({ count, difficulty });
       } else if (type === 'anagram') {
@@ -1594,12 +1590,27 @@ async function executerBanc(env) {
     if (t.tache === 'blindtest') {
       const sortie = {};
       const themes = (params.themes || []).slice(0, 5);
+      const combien = params.count || 10;
       const budget = Math.max(4, Math.floor(30 / Math.max(1, themes.length)));
       for (const theme of themes) {
-        const pistes = await fetchThemeTracks(theme, 60, params.count || 10, budget);
+        const pistes = await fetchThemeTracks(theme, 60, combien, budget);
+        const vus = new Set();
+        const pool = [];
+        for (const x of shuffle(pistes)) {
+          const k = cleMorceau(x);
+          if (vus.has(k)) continue;
+          vus.add(k); pool.push(x);
+        }
+        // Le banc produit exactement ce que produirait l'application : les
+        // questions complètes, propositions comprises.
+        const questions = construireBlindTest(pool, pool.slice(0, Math.min(combien, pool.length)));
         sortie[theme] = {
-          nombre: pistes.length,
-          morceaux: pistes.slice(0, 40).map((x) => `${x.title} — ${x.artist}`),
+          vivier: pool.length,
+          questions: questions.map((q) => ({
+            bonne: q.options[q.correct],
+            leurres: q.options.filter((_, i) => i !== q.correct),
+            extrait: !!q.audioUrl,
+          })),
         };
       }
       res = sortie;
