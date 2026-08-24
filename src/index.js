@@ -654,10 +654,18 @@ async function fetchArtistTracks(nom, titres = []) {
 // Certaines ambiances se définissent par des chansons, pas par des artistes :
 // personne ne cherche « la discographie d'Anaïs Delva », on cherche
 // « Libérée, délivrée ». On prend alors l'enregistrement le plus écouté.
-async function fetchTitreTrack(recherche) {
-  const data = await deezerJson(`/search?q=${encodeURIComponent(recherche)}&limit=8`);
+async function fetchTitreTrack(titre, contexte = '') {
+  const data = await deezerJson(`/search?q=${encodeURIComponent(`${titre} ${contexte}`.trim())}&limit=10`);
   const pistes = mapDeezerTracks(data?.data);
-  return pistes.length ? [pistes[0]] : [];
+  // Le titre trouvé doit être celui qu'on cherchait. Sans cette vérification,
+  // une recherche « Heigh-Ho Blanche-Neige » rapportait « Sifflez en
+  // travaillant » : même film, autre chanson, donc mauvaise réponse.
+  const voulu = normTxt(titre);
+  const bon = pistes.find((t) => {
+    const ti = normTxt(t.title);
+    return ti === voulu || ti.startsWith(voulu) || ti.includes(voulu);
+  });
+  return bon ? [bon] : [];
 }
 
 // --- Ambiance servie par la base maison ------------------------------------
@@ -687,7 +695,10 @@ async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
     const lots = await Promise.all(paquet.map(async (entree) => {
       const brut = String(entree);
       if (brut.startsWith('#')) {
-        try { return await fetchTitreTrack(brut.slice(1).trim()); } catch { return []; }
+        // Format « #Titre|Film » : le film sert à cibler la recherche, le titre
+        // sert à vérifier qu'on a bien trouvé la bonne chanson.
+        const [titre, contexte = ''] = brut.slice(1).split('|');
+        try { return await fetchTitreTrack(titre.trim(), contexte.trim()); } catch { return []; }
       }
       const [nom, ...titres] = brut.split('|');
       try {
