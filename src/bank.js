@@ -78,6 +78,21 @@ export async function fingerprintAll(questions, topic = '') {
 }
 
 // --- Tirage : des questions de ce sujet que CE joueur n'a jamais vues ---------
+// Mélange sincère (Fisher-Yates).
+function melanger(liste) {
+  const a = [...liste];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Une question tirée de la banque a pu y être enregistrée AVANT que les
+// contrôles n'existent. Deux filets de sécurité au moment de servir :
+const QUESTION_DICTIONNAIRE = /\btaxons?\b|\bnomenclature\b|\bsigle\b|\bacronyme\b|étymologi|nom scientifique|nom latin|\ben latin\b|\bclades?\b/i;
+const EST_UNE_CITATION = /[«"“][^»"”]{8,}[»"”]/;
+
 export async function drawUnseen(env, { userId, topic, type, difficulty, language = 'fr', limit }) {
   if (!limit || limit < 1) return [];
   try {
@@ -93,17 +108,37 @@ export async function drawUnseen(env, { userId, topic, type, difficulty, languag
         ORDER BY b.served ASC, RANDOM()
         LIMIT ?`
     ).bind(userId, userId, topicKey(topic), type, difficulty, language, limit).all();
-    return (rows.results || []).map((r) => ({
-      fp: r.fp,
-      ak: r.ak,
-      question: r.question,
-      options: JSON.parse(r.options),
-      correct: r.correct,
-      explanation: r.explanation || '',
-      sourceUrl: r.source_url || null,
-      sourceTitle: r.source_title || null,
-      fromBank: true,
-    }));
+    return (rows.results || [])
+      .filter((r) => !QUESTION_DICTIONNAIRE.test(r.question))
+      .filter((r) => type !== 'quote' || EST_UNE_CITATION.test(r.question))
+      .map((r) => {
+        const options = JSON.parse(r.options);
+        let correct = r.correct;
+        // La position enregistrée est celle qu'avait choisie le modèle. Sur les
+        // 22 questions « Trouve l'intrus » de la banque, 16 avaient leur
+        // réponse en quatrième position : les resservir telles quelles aurait
+        // reconduit le défaut. On remélange à chaque service.
+        if (options.length >= 3) {
+          const bonne = options[correct];
+          const melange = melanger(options);
+          const idx = melange.indexOf(bonne);
+          if (idx >= 0) {
+            options.splice(0, options.length, ...melange);
+            correct = idx;
+          }
+        }
+        return {
+          fp: r.fp,
+          ak: r.ak,
+          question: r.question,
+          options,
+          correct,
+          explanation: r.explanation || '',
+          sourceUrl: r.source_url || null,
+          sourceTitle: r.source_title || null,
+          fromBank: true,
+        };
+      });
   } catch {
     return [];
   }
