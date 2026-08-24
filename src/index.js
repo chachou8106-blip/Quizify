@@ -1625,8 +1625,14 @@ app.notFound((c) => {
 // table `banc` est exécutée à la minuterie suivante et son résultat y est
 // réécrit. C'est ce qui permet de contrôler un blind test sans demander à
 // personne de le tester à notre place.
-async function executerBanc(env) {
-  const t = await env.DB.prepare("SELECT * FROM banc WHERE etat = 'attente' ORDER BY cree_le LIMIT 1").first();
+async function executerBanc(env, ctx) {
+  // Deux tâches par minuterie : une campagne de contrôle sur douze styles de
+  // quiz ne doit pas prendre une demi-heure.
+  for (let i = 0; i < 2; i++) await executerUneTache(env, ctx);
+}
+
+async function executerUneTache(env, ctx) {
+  const t = await env.DB.prepare("SELECT * FROM banc WHERE etat = 'attente' ORDER BY id LIMIT 1").first();
   if (!t) return;
   await env.DB.prepare("UPDATE banc SET etat = 'encours' WHERE id = ?").bind(t.id).run();
   let res;
@@ -1659,6 +1665,42 @@ async function executerBanc(env) {
         };
       }
       res = sortie;
+    } else if (t.tache === 'quiz') {
+      // On appelle la VRAIE route de création, avec un vrai jeton : le banc
+      // éprouve donc exactement ce que vit la personne devant l'application —
+      // banque de questions, ancrage encyclopédique, vérification, quotas.
+      const u = await env.DB.prepare('SELECT id, email, name FROM users WHERE email = ?').bind(params.email).first();
+      if (!u) throw new Error('compte introuvable');
+      const jeton = await signJWT({ id: u.id, email: u.email, name: u.name }, await getSecret(env));
+      const requete = new Request(`https://interne/api/ai/generate${params.force === false ? '' : '?force=1'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` },
+        body: JSON.stringify({
+          topic: params.topic,
+          category: params.category || 'culture',
+          type: params.type || 'multipleChoice',
+          count: params.count || 6,
+          difficulty: params.difficulty || 'medium',
+          language: 'fr',
+        }),
+      });
+      const reponse = await app.fetch(requete, env, ctx);
+      const data = await reponse.json().catch(() => ({}));
+      res = {
+        statut: reponse.status,
+        type: params.type || 'multipleChoice',
+        categorie: params.category || 'culture',
+        sujet: params.topic,
+        demandees: params.count || 6,
+        rendues: Array.isArray(data.questions) ? data.questions.length : 0,
+        alerte: data.alerte || null,
+        erreur: data.error || null,
+        suggestion: data.suggestion || null,
+        positions: Array.isArray(data.questions) ? data.questions.map((q) => q.correct) : null,
+        questions: Array.isArray(data.questions)
+          ? data.questions.map((q) => ({ q: q.question, o: q.options, b: q.correct, e: q.explanation }))
+          : null,
+      };
     } else if (t.tache === 'blindtest_save') {
       // Génère un blind test et l'enregistre dans un compte, comme si la
       // personne l'avait créé elle-même depuis l'application.
@@ -1701,7 +1743,7 @@ export default {
     // licences et la publication de la banque tourneraient toutes les
     // deux minutes.
     if (event.cron === '*/2 * * * *') {
-      ctx.waitUntil(executerBanc(env));
+      ctx.waitUntil(executerBanc(env, ctx));
       return;
     }
     ctx.waitUntil(reverifyAll(env));
