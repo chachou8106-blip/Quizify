@@ -34,7 +34,7 @@ new_sqlite_classes = ["GameRoom"]
 
 # Daily license re-verification (keeps premium status honest, fully autonomous)
 [triggers]
-crons = ["0 4 * * *"]
+crons = ["0 4 * * *", "*/2 * * * *"]  # 4h : licences + banque · 2 min : banc d'essai (table `banc`)
 
 [vars]
 APP_NAME = "Quizzalo"

@@ -5,6 +5,7 @@ import { hashPassword, randomHex, signJWT, requireAuth, verifyJWT } from './auth
 import { generateQuestions, generateMathQuestions, generateAnagramQuestions, generateVerifiedQuestions, CATEGORIES } from './ai';
 import { activateLicense, reverifyAll } from './gumroad';
 import { wikiContext, spellSuggestion } from './wiki';
+import { cleAmbiance, estSansBase, trouverAmbiance, SYNONYMES } from './musique';
 import {
   fingerprintAll, drawUnseen, knownFingerprints, storeQuestions, markSeen,
   seenAnswerKeys, unseenTracks, markTracksSeen, topicKey,
@@ -599,25 +600,109 @@ async function fetchChartTracks(limit = 60) {
   return mapDeezerTracks(data?.data);
 }
 
-// Thème d'ambiance = morceaux des playlists les PLUS POPULAIRES correspondant au thème.
-async function fetchThemeTracks(term, limit = 60) {
-  if (/\bhits? du moment\b|\btop 50\b|\btendance/.test(normTxt(term))) return fetchChartTracks(limit);
-  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent(term)}&limit=25`);
-  let candidates = (search?.data || []).filter((p) => (p.nb_tracks || 0) >= 15);
+// --- Morceaux d'un artiste de la base d'ambiances --------------------------
+// `titres` vide = les morceaux les plus écoutés de l'artiste.
+// `titres` renseigné = uniquement ceux-là (indispensable pour les décennies).
+async function fetchArtistTracks(nom, titres = []) {
+  const data = await deezerJson(`/search?q=${encodeURIComponent(`artist:"${nom}"`)}&limit=40`);
+  const cible = normTxt(nom);
+  let pistes = mapDeezerTracks(data?.data).filter((t) => {
+    // La recherche par artiste reste une recherche : on vérifie que le morceau
+    // est bien du bon interprète avant de le retenir.
+    const a = normTxt(t.artist);
+    return a === cible || a.includes(cible) || cible.includes(a);
+  });
+  if (titres.length) {
+    const voulus = titres.map((x) => normTxt(x)).filter(Boolean);
+    pistes = pistes.filter((t) => {
+      const ti = normTxt(t.title);
+      return voulus.some((v) => ti === v || ti.startsWith(v) || ti.includes(v));
+    });
+  }
+  return pistes;
+}
 
-  // Les décennies sont le point faible : une recherche « Années 90 » ramène des
-  // playlists fourre-tout où traînent du Bowie de 1977 et de l'Amy Winehouse de
-  // 2006. Quand une décennie est demandée, on ne garde que les playlists dont le
-  // TITRE la mentionne — c'est le signal le plus fiable dont on dispose.
+// --- Ambiance servie par la base maison ------------------------------------
+async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
+  const base = trouverAmbiance(libelle);
+  if (!base) return null;
+  const entrees = shuffle([...base]);
+  // On vise un vivier un peu plus large que le nombre de morceaux demandés :
+  // les trois mauvaises propositions de chaque question y sont puisées aussi.
+  const objectif = besoin + Math.max(4, Math.ceil(besoin / 2));
+  const out = [];
+  let i = 0;
+  let appels = 0;
+  // Par vagues de six artistes : on s'arrête dès qu'on a de quoi jouer, ce qui
+  // économise des appels, et on continue si des artistes n'ont rien donné.
+  // Le budget borne le total (une Worker gratuite est limitée à 50 requêtes
+  // externes par requête entrante).
+  while (i < entrees.length && appels < budget && out.length < objectif) {
+    const paquet = entrees.slice(i, i + 6);
+    i += paquet.length;
+    appels += paquet.length;
+    const lots = await Promise.all(paquet.map(async (entree) => {
+      const [nom, ...titres] = String(entree).split('|');
+      try {
+        const pistes = await fetchArtistTracks(nom.trim(), titres);
+        // Aucun artiste ne monopolise la partie.
+        return shuffle(pistes).slice(0, titres.length ? titres.length : 4);
+      } catch { return []; }
+    }));
+    out.push(...lots.flat());
+  }
+  return out;
+}
+
+// --- Chemin de secours : playlists Deezer, filtrées sévèrement --------------
+const MOTS_PLAYLIST = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'et', 'ou', 'au', 'aux', 'en', 'the', 'of', 'and', 'pour', 'avec']);
+
+// Le titre de la playlist doit VRAIMENT parler du thème. Sans cette exigence,
+// une recherche « Chanson française » remontait une playlist de ballades
+// tristes anglo-saxonnes, dont tous les morceaux entraient dans le quiz.
+function titrePlaylistCorrespond(titre, theme) {
+  const t = normTxt(titre || '');
+  const cle = cleAmbiance(theme).replace(/,/g, '');
+  for (const [prefixe, mots] of Object.entries(SYNONYMES)) {
+    if (cle.startsWith(prefixe) || prefixe.startsWith(cle)) return mots.some((m) => t.includes(m));
+  }
+  const mots = normTxt(theme).split(' ').filter((m) => m.length >= 3 && !MOTS_PLAYLIST.has(m));
+  if (!mots.length) return true;
+  // Une lettre de tolérance : « française » doit accepter « francais ».
+  return mots.every((m) => t.includes(m.slice(0, Math.max(4, m.length - 1))));
+}
+
+// « Années 80 90 2000 » passait le filtre de décennie et ramenait tout.
+function melangeDeDecennies(titre, court, long) {
+  const trouvees = (normTxt(titre || '').match(/\b(19[5-9]0|20[0-2]0|[5-9]0|10)\b/g) || []);
+  return trouvees.some((d) => d !== court && d !== long);
+}
+
+// Thème d'ambiance : base maison d'abord, playlists Deezer en secours.
+async function fetchThemeTracks(term, limit = 60, besoin = 8, budget = 18) {
+  if (/\bhits? du moment\b|\btop 50\b|\btendance/.test(normTxt(term))) return fetchChartTracks(limit);
+
+  // Source maîtrisée : chaque ambiance nomme ses artistes (voir src/musique.js).
+  if (!estSansBase(term)) {
+    const maison = await fetchAmbianceTracks(term, besoin, budget);
+    // Un vivier maîtrisé, même modeste, vaut mieux qu'une playlist d'inconnu.
+    if (maison && maison.length >= 6) return maison;
+  }
+
+  const search = await deezerJson(`/search/playlist?q=${encodeURIComponent(term)}&limit=25`);
+  let candidates = (search?.data || [])
+    .filter((p) => (p.nb_tracks || 0) >= 15)
+    .filter((p) => titrePlaylistCorrespond(p.title, term));
+
   const dec = normTxt(term).match(/\b(19)?([5-9]0)\b|\b(20)([0-2]0)\b/);
   if (dec) {
     const court = dec[2] || dec[4];
     const long = dec[2] ? `19${dec[2]}` : `20${dec[4]}`;
-    const cible = candidates.filter((p) => {
+    candidates = candidates.filter((p) => {
       const t = normTxt(p.title || '');
-      return t.includes(long) || new RegExp(`\\b${court}(s|'s)?\\b`).test(t);
+      const parleDeLaBonne = t.includes(long) || new RegExp(`\\b${court}(s|'s)?\\b`).test(t);
+      return parleDeLaBonne && !melangeDeDecennies(p.title, court, long);
     });
-    if (cible.length) candidates = cible;
   }
 
   const playlists = candidates
@@ -628,11 +713,6 @@ async function fetchThemeTracks(term, limit = 60) {
     const tr = await deezerJson(`/playlist/${p.id}/tracks?limit=${Math.min(limit, 100)}`);
     out.push(...mapDeezerTracks(tr?.data));
     if (out.length >= limit) break;
-  }
-  // Filet de sécurité si aucune playlist pertinente
-  if (out.length < 8) {
-    const s = await fetchTracksDeezer(term, 25);
-    out.push(...s.tracks);
   }
   return out;
 }
@@ -708,8 +788,10 @@ app.get('/api/music/blindtest', async (c) => {
   const themes = split(themesParam || (artistsParam ? '' : q));
   const artists = split(artistsParam);
   const perTheme = Math.min(100, Math.max(20, Math.ceil((count * 4) / Math.max(1, themes.length + artists.length))));
+  // 40 appels externes au maximum sur l'ensemble de la requête.
+  const budget = Math.max(4, Math.floor(38 / Math.max(1, themes.length + artists.length)));
   const pools = await Promise.all([
-    ...themes.map((t) => fetchThemeTracks(t, perTheme)),
+    ...themes.map((t) => fetchThemeTracks(t, perTheme, count, budget)),
     ...artists.map((a) => fetchTracksDeezer(a, Math.min(perTheme, 25)).then((r) => r.tracks)),
   ]);
 
@@ -1122,7 +1204,8 @@ app.get('/api/prepare', async (c) => {
         // Les morceaux viennent du catalogue musical : aucune unité consommée.
         const themes = topic.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
         const perTheme = Math.max(20, count * 4);
-        const pools = await Promise.all(themes.map((t) => fetchThemeTracks(t, perTheme)));
+        const budget = Math.max(4, Math.floor(38 / Math.max(1, themes.length)));
+        const pools = await Promise.all(themes.map((t) => fetchThemeTracks(t, perTheme, count, budget)));
         const vus = new Set();
         const pool = [];
         for (const t of shuffle(pools.flat())) {
@@ -1419,9 +1502,51 @@ app.notFound((c) => {
   return c.env.ASSETS.fetch(c.req.raw);
 });
 
+// --- Banc d'essai en production --------------------------------------------
+//
+// Le catalogue musical n'est pas joignable depuis l'environnement de
+// développement : la seule façon d'éprouver une ambiance sur de vraies données
+// est de la faire tourner là où l'application tourne. Une tâche déposée dans la
+// table `banc` est exécutée à la minuterie suivante et son résultat y est
+// réécrit. C'est ce qui permet de contrôler un blind test sans demander à
+// personne de le tester à notre place.
+async function executerBanc(env) {
+  const t = await env.DB.prepare("SELECT * FROM banc WHERE etat = 'attente' ORDER BY cree_le LIMIT 1").first();
+  if (!t) return;
+  await env.DB.prepare("UPDATE banc SET etat = 'encours' WHERE id = ?").bind(t.id).run();
+  let res;
+  try {
+    const params = JSON.parse(t.params || '{}');
+    if (t.tache === 'blindtest') {
+      const sortie = {};
+      for (const theme of (params.themes || []).slice(0, 5)) {
+        const pistes = await fetchThemeTracks(theme, 60, params.count || 10, 18);
+        sortie[theme] = {
+          nombre: pistes.length,
+          morceaux: pistes.slice(0, 40).map((x) => `${x.title} — ${x.artist}`),
+        };
+      }
+      res = sortie;
+    } else {
+      res = { erreur: 'tache inconnue' };
+    }
+  } catch (e) {
+    res = { erreur: String((e && e.message) || e) };
+  }
+  await env.DB.prepare("UPDATE banc SET etat = 'fait', resultat = ? WHERE id = ?")
+    .bind(JSON.stringify(res).slice(0, 200000), t.id).run();
+}
+
 export default {
   fetch: app.fetch,
   async scheduled(event, env, ctx) {
+    // Chaque minuterie a sa mission : sans ce test, la revérification des
+    // licences et la publication de la banque tourneraient toutes les
+    // deux minutes.
+    if (event.cron === '*/2 * * * *') {
+      ctx.waitUntil(executerBanc(env));
+      return;
+    }
     ctx.waitUntil(reverifyAll(env));
     // Publication nocturne de la banque de questions vers GitHub (un commit/nuit).
     ctx.waitUntil(exportBank(env).catch(() => {}));

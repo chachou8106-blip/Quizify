@@ -23,3 +23,15 @@ CREATE TABLE IF NOT EXISTS question_seen (user_id TEXT NOT NULL, fp TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS answer_seen (user_id TEXT NOT NULL, ak TEXT NOT NULL, seen_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (user_id, ak));
 -- Idem pour les morceaux des blind tests.
 CREATE TABLE IF NOT EXISTS track_seen (user_id TEXT NOT NULL, track_id TEXT NOT NULL, seen_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (user_id, track_id));
+
+-- Banc d'essai exécuté en production (voir executerBanc dans src/index.js).
+-- Permet d'éprouver une génération sur de vraies données depuis l'extérieur :
+-- on dépose une tâche, la minuterie l'exécute, on relit le résultat.
+CREATE TABLE IF NOT EXISTS banc (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tache TEXT NOT NULL,
+  params TEXT,
+  etat TEXT NOT NULL DEFAULT 'attente',
+  resultat TEXT,
+  cree_le TEXT NOT NULL DEFAULT (datetime('now'))
+);
