@@ -840,8 +840,9 @@ app.get('/api/music/blindtest', async (c) => {
   const themes = split(themesParam || (artistsParam ? '' : q));
   const artists = split(artistsParam);
   const perTheme = Math.min(100, Math.max(20, Math.ceil((count * 4) / Math.max(1, themes.length + artists.length))));
-  // 40 appels externes au maximum sur l'ensemble de la requête.
-  const budget = Math.max(4, Math.floor(38 / Math.max(1, themes.length + artists.length)));
+  // Une Worker ne peut émettre que 50 requêtes externes par requête entrante.
+  // On s'arrête à 30 pour garder de la marge (chemin de secours, redirections).
+  const budget = Math.max(4, Math.floor(30 / Math.max(1, themes.length + artists.length)));
   const pools = await Promise.all([
     ...themes.map((t) => fetchThemeTracks(t, perTheme, count, budget)),
     ...artists.map((a) => fetchTracksDeezer(a, Math.min(perTheme, 25)).then((r) => r.tracks)),
@@ -1256,7 +1257,7 @@ app.get('/api/prepare', async (c) => {
         // Les morceaux viennent du catalogue musical : aucune unité consommée.
         const themes = topic.split(/[,;]/).map((x) => x.trim()).filter(Boolean);
         const perTheme = Math.max(20, count * 4);
-        const budget = Math.max(4, Math.floor(38 / Math.max(1, themes.length)));
+        const budget = Math.max(4, Math.floor(30 / Math.max(1, themes.length)));
         const pools = await Promise.all(themes.map((t) => fetchThemeTracks(t, perTheme, count, budget)));
         const vus = new Set();
         const pool = [];
@@ -1571,8 +1572,10 @@ async function executerBanc(env) {
     const params = JSON.parse(t.params || '{}');
     if (t.tache === 'blindtest') {
       const sortie = {};
-      for (const theme of (params.themes || []).slice(0, 5)) {
-        const pistes = await fetchThemeTracks(theme, 60, params.count || 10, 18);
+      const themes = (params.themes || []).slice(0, 5);
+      const budget = Math.max(4, Math.floor(30 / Math.max(1, themes.length)));
+      for (const theme of themes) {
+        const pistes = await fetchThemeTracks(theme, 60, params.count || 10, budget);
         sortie[theme] = {
           nombre: pistes.length,
           morceaux: pistes.slice(0, 40).map((x) => `${x.title} — ${x.artist}`),
