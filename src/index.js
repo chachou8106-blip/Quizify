@@ -563,10 +563,18 @@ async function deezerJson(path) {
 // exactement ce qu'on ne veut pas le soir d'un anniversaire.
 const GROS_MOTS = /\b(fuck|f\*ck|shit|bitch|nigga|niggas|pussy|cunt|salope|pute|enculé|encule|nique|niquer|connard|bite|couilles)\b/i;
 
+// Le catalogue est plein de reprises au kilomètre. Un blind test qui fait
+// écouter « Bohemian Rhapsody » par un ensemble karaoké n'est plus un blind
+// test : personne ne reconnaît l'enregistrement, et la bonne réponse devient
+// fausse.
+const CONTREFACONS = /\b(karaoke|karaoké|tribute|hommage à|cover band|covers?\b.*\bband|made famous by|in the style of|instrumental version|backing track|playback|the hit crew|kidz bop|orchestre de variété)\b/i;
+
 function mapDeezerTracks(list) {
   return (list || [])
     .filter((t) => t.preview && t.title && t.artist?.name)
     .filter((t) => !t.explicit_lyrics && !GROS_MOTS.test(t.title) && !GROS_MOTS.test(t.artist?.name || ''))
+    .filter((t) => !CONTREFACONS.test(t.artist?.name || '') && !CONTREFACONS.test(t.title || '')
+      && !CONTREFACONS.test(t.album?.title || ''))
     .map((t) => ({
       title: cleanTitle(t.title),
       artist: t.artist.name,
@@ -632,7 +640,24 @@ async function fetchArtistTracks(nom, titres = []) {
       return voulus.some((v) => ti === v || ti.startsWith(v) || ti.includes(v));
     });
   }
-  return pistes;
+  // Un même enregistrement figure sur l'album, la compilation et le live : sans
+  // ce tri, « Amsterdam » occupait trois des huit meilleures places de Brel.
+  const vus = new Set();
+  return pistes.filter((t) => {
+    const k = cleMorceau(t);
+    if (vus.has(k)) return false;
+    vus.add(k);
+    return true;
+  });
+}
+
+// Certaines ambiances se définissent par des chansons, pas par des artistes :
+// personne ne cherche « la discographie d'Anaïs Delva », on cherche
+// « Libérée, délivrée ». On prend alors l'enregistrement le plus écouté.
+async function fetchTitreTrack(recherche) {
+  const data = await deezerJson(`/search?q=${encodeURIComponent(recherche)}&limit=8`);
+  const pistes = mapDeezerTracks(data?.data);
+  return pistes.length ? [pistes[0]] : [];
 }
 
 // --- Ambiance servie par la base maison ------------------------------------
@@ -660,7 +685,11 @@ async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
     i += paquet.length;
     appels += paquet.length;
     const lots = await Promise.all(paquet.map(async (entree) => {
-      const [nom, ...titres] = String(entree).split('|');
+      const brut = String(entree);
+      if (brut.startsWith('#')) {
+        try { return await fetchTitreTrack(brut.slice(1).trim()); } catch { return []; }
+      }
+      const [nom, ...titres] = brut.split('|');
       try {
         const pistes = await fetchArtistTracks(nom.trim(), titres);
         // Trois morceaux au maximum par artiste : personne ne veut cinq

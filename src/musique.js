@@ -439,6 +439,67 @@ export const AMBIANCES = {
   ],
 
   // -------------------------------------------------------------- thématiques
+  disney: [
+    // Ici on nomme les chansons, pas les interprètes : le catalogue range les
+    // bandes originales sous des noms d'artistes que personne ne connaît, et
+    // une recherche « Disney » ramène les séries pour adolescents de Disney
+    // Channel plutôt que les grands classiques.
+    '#Libérée délivrée La Reine des Neiges',
+    '#Hakuna Matata Le Roi Lion',
+    '#L\'amour brille sous les étoiles Le Roi Lion',
+    '#Je voudrais déjà être roi Le Roi Lion',
+    '#Sous l\'océan La Petite Sirène',
+    '#Partir là-bas La Petite Sirène',
+    '#Ce rêve bleu Aladdin',
+    '#Je suis ton meilleur ami Aladdin',
+    '#Histoire éternelle La Belle et la Bête',
+    '#C\'est la fête La Belle et la Bête',
+    '#Il en faut peu pour être heureux Le Livre de la Jungle',
+    '#Être un homme comme vous Le Livre de la Jungle',
+    '#Un jour mon prince viendra Blanche-Neige',
+    '#Heigh-Ho Blanche-Neige',
+    '#L\'air du vent Pocahontas',
+    '#Comme un homme Mulan',
+    '#Je suis ton ami Toy Story',
+    '#Les cloches de Notre-Dame Le Bossu de Notre-Dame',
+    '#De zéro en héros Hercule',
+    '#Le bleu lumière Vaiana',
+    '#Je veux y croire Raiponce',
+    '#Tout le monde veut devenir un cat Les Aristochats',
+    '#Souviens-toi de moi Coco',
+    '#Quand on prie la bonne étoile Pinocchio',
+    '#Un morceau de sucre Mary Poppins',
+    '#Supercalifragilisticexpialidocious Mary Poppins',
+    '#Tendre rêve Cendrillon',
+    '#Le monde est petit Disney',
+  ],
+  'generiques de series': [
+    'The Rembrandts|I\'ll Be There for You',
+    'Ramin Djawadi|Main Title|Light of the Seven',
+    'Kyle Dixon & Michael Stein|Stranger Things',
+    'Barenaked Ladies|Big Bang Theory Theme',
+    'Alexandre Desplat|Générique',
+    '#Générique Goldorak',
+    '#Générique Albator',
+    '#Générique Candy',
+    '#Générique Les Mystérieuses Cités d\'or',
+    '#Générique Ulysse 31',
+    '#Générique Il était une fois la vie',
+    '#Générique Inspecteur Gadget',
+    '#Générique Nicky Larson',
+    '#Générique Les Chevaliers du Zodiaque',
+    '#Chala Head Chala Dragon Ball Z',
+    '#Générique Bioman',
+    '#Générique Sailor Moon',
+    '#Hélène et les garçons générique',
+    '#Générique Hélène je m\'appelle Hélène',
+    '#Mission Impossible Theme Lalo Schifrin',
+    '#Hawaii Five-O Theme',
+    '#The X-Files Theme Mark Snow',
+    '#Peaky Blinders Red Right Hand Nick Cave',
+    '#Westworld Main Title Theme',
+    '#Twin Peaks Theme Angelo Badalamenti',
+  ],
   'musiques de films': [
     'Hans Zimmer', 'John Williams', 'Ennio Morricone', 'Howard Shore',
     'Danny Elfman', 'Alexandre Desplat', 'Michel Legrand', 'Vladimir Cosma',
@@ -615,7 +676,7 @@ export const AMBIANCES = {
 
 // Ambiances sans base d'artistes : on retombe sur les playlists Deezer, mais
 // filtrées beaucoup plus sévèrement (voir index.js).
-export const SANS_BASE = new Set(['hits du moment', 'disney', 'generiques de series']);
+export const SANS_BASE = new Set(['hits du moment']);
 
 // Mots dont la présence dans le titre d'une playlist prouve qu'elle parle bien
 // du thème demandé. Sert au chemin de secours.
