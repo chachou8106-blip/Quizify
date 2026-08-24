@@ -657,11 +657,24 @@ async function fetchArtistTracks(nom, titres = []) {
     return false;
   });
   if (titres.length) {
-    const voulus = titres.map((x) => normTxt(x)).filter(Boolean);
-    pistes = pistes.filter((t) => {
+    // Un seul enregistrement par titre demandé, et le plus proche du titre
+    // cherché. Une simple recherche « contient » retenait « December (Based on
+    // \"September\") » pour September et « Macarena Christmas » pour Macarena.
+    const proximite = (t, v) => {
       const ti = normTxt(t.title);
-      return voulus.some((v) => ti === v || ti.startsWith(v) || ti.includes(v));
-    });
+      if (ti === v) return 0;
+      if (ti.startsWith(v)) return 1;
+      return 2;
+    };
+    const retenus = [];
+    for (const voulu of titres.map((x) => normTxt(x)).filter(Boolean)) {
+      const candidats = pistes.filter((t) => normTxt(t.title).includes(voulu));
+      if (!candidats.length) continue;
+      candidats.sort((a, b) => proximite(a, voulu) - proximite(b, voulu)
+        || versionAlternative(a) - versionAlternative(b));
+      retenus.push(candidats[0]);
+    }
+    pistes = retenus;
   }
   // L'originale d'abord, les prises alternatives ensuite. Le tri est stable :
   // à l'intérieur de chaque groupe, l'ordre de popularité du catalogue est
