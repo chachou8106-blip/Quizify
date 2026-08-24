@@ -603,6 +603,19 @@ async function fetchChartTracks(limit = 60) {
 // --- Morceaux d'un artiste de la base d'ambiances --------------------------
 // `titres` vide = les morceaux les plus écoutés de l'artiste.
 // `titres` renseigné = uniquement ceux-là (indispensable pour les décennies).
+// Deux enregistrements du même morceau ne sont pas deux questions : « Perfect
+// (Acoustic) » et « Perfect Duet (with Beyoncé) » sont la même chanson, et
+// « Amoureuse » revient deux fois dans le catalogue de Véronique Sanson.
+function cleMorceau(t) {
+  const titre = normTxt(
+    String(t.title || '')
+      .replace(/\([^)]*\)|\[[^\]]*\]/g, '')
+      .replace(/\s+-\s+.*$/, '')
+      .replace(/\bfeat\.?\s.*$/i, ''),
+  );
+  return `${titre}|${normTxt(t.artist || '')}`;
+}
+
 async function fetchArtistTracks(nom, titres = []) {
   const data = await deezerJson(`/search?q=${encodeURIComponent(`artist:"${nom}"`)}&limit=40`);
   const cible = normTxt(nom);
@@ -626,7 +639,12 @@ async function fetchArtistTracks(nom, titres = []) {
 async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
   const base = trouverAmbiance(libelle);
   if (!base) return null;
-  const entrees = shuffle([...base]);
+  // Les listes sont écrites du plus connu au moins connu. On mélange à
+  // l'intérieur de deux moitiés plutôt que sur l'ensemble : une soirée réclame
+  // Brel et Piaf avant Guy Béart, tout en gardant de la variété d'une partie à
+  // l'autre.
+  const coupe = Math.ceil(base.length * 0.55);
+  const entrees = [...shuffle(base.slice(0, coupe)), ...shuffle(base.slice(coupe))];
   // On vise un vivier un peu plus large que le nombre de morceaux demandés :
   // les trois mauvaises propositions de chaque question y sont puisées aussi.
   const objectif = besoin + Math.max(4, Math.ceil(besoin / 2));
@@ -645,8 +663,13 @@ async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
       const [nom, ...titres] = String(entree).split('|');
       try {
         const pistes = await fetchArtistTracks(nom.trim(), titres);
-        // Aucun artiste ne monopolise la partie.
-        return shuffle(pistes).slice(0, titres.length ? titres.length : 4);
+        // Trois morceaux au maximum par artiste : personne ne veut cinq
+        // questions de suite sur le même chanteur.
+        if (titres.length) return shuffle(pistes).slice(0, Math.min(titres.length, 3));
+        // Deezer renvoie les morceaux par popularité décroissante. On puise
+        // dans les huit premiers : un blind test se joue sur des chansons que
+        // l'on reconnaît, pas sur la face B d'un album de 1954.
+        return shuffle(pistes.slice(0, 8)).slice(0, 4);
       } catch { return []; }
     }));
     out.push(...lots.flat());
@@ -799,7 +822,7 @@ app.get('/api/music/blindtest', async (c) => {
   const seen = new Set();
   const pool = [];
   for (const track of shuffle(pools.flat())) {
-    const key = `${track.title.toLowerCase()}|${track.artist.toLowerCase()}`;
+    const key = cleMorceau(track);
     if (seen.has(key)) continue;
     seen.add(key);
     pool.push(track);
@@ -1209,7 +1232,7 @@ app.get('/api/prepare', async (c) => {
         const vus = new Set();
         const pool = [];
         for (const t of shuffle(pools.flat())) {
-          const k = `${t.title.toLowerCase()}|${t.artist.toLowerCase()}`;
+          const k = cleMorceau(t);
           if (vus.has(k)) continue;
           vus.add(k); pool.push(t);
         }
