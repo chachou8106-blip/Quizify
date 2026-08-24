@@ -92,6 +92,7 @@ function melanger(liste) {
 // contrôles n'existent. Deux filets de sécurité au moment de servir :
 const QUESTION_DICTIONNAIRE = /\btaxons?\b|\bnomenclature\b|\bsigle\b|\bacronyme\b|étymologi|nom scientifique|nom latin|\ben latin\b|\bclades?\b/i;
 const EST_UNE_CITATION = /[«"“][^»"”]{8,}[»"”]/;
+const UN_EMOJI = /\p{Extended_Pictographic}/gu;
 
 export async function drawUnseen(env, { userId, topic, type, difficulty, language = 'fr', limit }) {
   if (!limit || limit < 1) return [];
@@ -111,6 +112,7 @@ export async function drawUnseen(env, { userId, topic, type, difficulty, languag
     return (rows.results || [])
       .filter((r) => !QUESTION_DICTIONNAIRE.test(r.question))
       .filter((r) => type !== 'quote' || EST_UNE_CITATION.test(r.question))
+      .filter((r) => type !== 'emoji' || (r.question.match(UN_EMOJI) || []).length >= 2)
       .map((r) => {
         const options = JSON.parse(r.options);
         let correct = r.correct;
