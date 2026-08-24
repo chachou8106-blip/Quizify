@@ -1614,6 +1614,31 @@ async function executerBanc(env) {
         };
       }
       res = sortie;
+    } else if (t.tache === 'blindtest_save') {
+      // Génère un blind test et l'enregistre dans un compte, comme si la
+      // personne l'avait créé elle-même depuis l'application.
+      const u = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(params.email).first();
+      if (!u) throw new Error('compte introuvable');
+      const themes = (params.themes || []).slice(0, 3);
+      const combien = params.count || 12;
+      const budget = Math.max(4, Math.floor(30 / Math.max(1, themes.length)));
+      const pistes = (await Promise.all(themes.map((th) => fetchThemeTracks(th, 60, combien, budget)))).flat();
+      const vus = new Set();
+      const pool = [];
+      for (const x of shuffle(pistes)) {
+        const k = cleMorceau(x);
+        if (vus.has(k)) continue;
+        vus.add(k); pool.push(x);
+      }
+      if (pool.length < 4) throw new Error('pas assez de morceaux');
+      const questions = construireBlindTest(pool, pool.slice(0, Math.min(combien, pool.length)));
+      const id = randomHex(10);
+      const code = shareCode();
+      await env.DB.prepare(
+        'INSERT INTO quizzes (id, user_id, title, category, emoji, difficulty, language, questions, share_code, sources, verified) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      ).bind(id, u.id, String(params.titre || `🎧 Blind test : ${themes.join(', ')}`).slice(0, 100),
+        'blindtest', '🎧', 'medium', 'fr', JSON.stringify(questions), code, null, 0).run();
+      res = { id, titre: params.titre, morceaux: questions.length, liste: questions.map((q) => q.options[q.correct]) };
     } else {
       res = { erreur: 'tache inconnue' };
     }
