@@ -592,6 +592,9 @@ function mapDeezerTracks(list) {
       // that resolves a fresh URL at play time instead.
       preview: `/api/music/preview/dz/${t.id}`,
       art: t.album?.cover_medium || '',
+      // Sert à départager les enregistrements : la bande originale d'un film
+      // porte le nom du film sur son album, pas la reprise d'un inconnu.
+      album: t.album?.title || '',
     }));
 }
 
@@ -690,7 +693,15 @@ async function fetchTitreTrack(titre, contexte = '') {
     const ti = normTxt(t.title);
     return ti === voulu || ti.startsWith(voulu) || ti.includes(voulu);
   });
-  correspond.sort((a, b) => versionAlternative(a) - versionAlternative(b));
+  // On préfère l'enregistrement officiel : celui dont l'album parle du film.
+  // Sans cela, « Un jour mon prince viendra » revenait chanté par un compte de
+  // reprises plutôt que par la bande originale.
+  const mots = normTxt(contexte).split(' ').filter((m) => m.length >= 4);
+  const officiel = (t) => {
+    const ou = normTxt(`${t.album} ${t.title}`);
+    return mots.some((m) => ou.includes(m)) || /disney|bande originale|original soundtrack/.test(ou) ? 0 : 1;
+  };
+  correspond.sort((a, b) => officiel(a) - officiel(b) || versionAlternative(a) - versionAlternative(b));
   return correspond.length ? [correspond[0]] : [];
 }
 
