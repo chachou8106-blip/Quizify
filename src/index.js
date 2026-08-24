@@ -629,9 +629,19 @@ async function fetchArtistTracks(nom, titres = []) {
   const cible = normTxt(nom);
   let pistes = mapDeezerTracks(data?.data).filter((t) => {
     // La recherche par artiste reste une recherche : on vérifie que le morceau
-    // est bien du bon interprète avant de le retenir.
-    const a = normTxt(t.artist);
-    return a === cible || a.includes(cible) || cible.includes(a);
+    // est bien du bon interprète. La comparaison ne doit accepter le nom
+    // cherché qu'en TÊTE du nom trouvé : « Warren » (zouk) attrapait sinon
+    // « Alex Warren », et « The Who » un obscur artiste nommé « Who ».
+    const brut = String(t.artist || '');
+    const a = normTxt(brut);
+    if (a === cible) return true;
+    // Le catalogue crédite parfois plus court que la base : « Bob Marley »
+    // pour « Bob Marley & The Wailers ».
+    if (cible.startsWith(`${a} `)) return true;
+    // Plus long : on n'accepte qu'une collaboration, jamais un homonyme.
+    // « Michael Jackson & Paul McCartney » oui, « Queen Latifah » non.
+    if (a.startsWith(`${cible} `)) return /[&,]|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bvs\.?\b/i.test(brut);
+    return false;
   });
   if (titres.length) {
     const voulus = titres.map((x) => normTxt(x)).filter(Boolean);
