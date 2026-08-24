@@ -547,8 +547,18 @@ app.post('/api/ai/generate', auth, async (c) => {
 
 // ---------- Blind Test musical (vrais extraits 30s via l'API publique iTunes, sans quota IA) ----------
 
+// Marqueurs d'une prise autre que la version connue de tous.
+const VERSION_AUTRE = /remaster|version|\bedit\b|\bmix\b|\blive\b|radio|acoustic|acoustique|unplugged|\bdub\b|instrumental|re-?recorded|rerecorded|pianoforte|extended|\bmono\b|\bstereo\b|\bdemo\b|session/i;
+
 function cleanTitle(s) {
-  return String(s).replace(/\s*\(.*?(remaster|version|edit|mix|live|radio).*?\)/gi, '').trim();
+  return String(s).replace(/\s*\((?=[^)]*(?:remaster|version|edit|mix|live|radio|acoustic|acoustique|unplugged|dub|instrumental|re-?recorded|rerecorded|pianoforte|extended|mono|stereo|demo|session))[^)]*\)/gi, '').trim();
+}
+
+// Un blind test se joue sur la version que tout le monde a en tête. « Creep
+// (Acoustic) », « Take On Me (MTV Unplugged) » ou « All That She Wants
+// (Extended Dub) » passent donc derrière l'originale.
+function versionAlternative(t) {
+  return VERSION_AUTRE.test(String(t?.title || '')) ? 1 : 0;
 }
 
 async function deezerJson(path) {
@@ -650,6 +660,11 @@ async function fetchArtistTracks(nom, titres = []) {
       return voulus.some((v) => ti === v || ti.startsWith(v) || ti.includes(v));
     });
   }
+  // L'originale d'abord, les prises alternatives ensuite. Le tri est stable :
+  // à l'intérieur de chaque groupe, l'ordre de popularité du catalogue est
+  // conservé. C'est ce qui fait gagner « Creep » contre « Creep (Acoustic) »
+  // au moment du dédoublonnage juste en dessous.
+  pistes.sort((a, b) => versionAlternative(a) - versionAlternative(b));
   // Un même enregistrement figure sur l'album, la compilation et le live : sans
   // ce tri, « Amsterdam » occupait trois des huit meilleures places de Brel.
   const vus = new Set();
@@ -671,11 +686,12 @@ async function fetchTitreTrack(titre, contexte = '') {
   // une recherche « Heigh-Ho Blanche-Neige » rapportait « Sifflez en
   // travaillant » : même film, autre chanson, donc mauvaise réponse.
   const voulu = normTxt(titre);
-  const bon = pistes.find((t) => {
+  const correspond = pistes.filter((t) => {
     const ti = normTxt(t.title);
     return ti === voulu || ti.startsWith(voulu) || ti.includes(voulu);
   });
-  return bon ? [bon] : [];
+  correspond.sort((a, b) => versionAlternative(a) - versionAlternative(b));
+  return correspond.length ? [correspond[0]] : [];
 }
 
 // --- Ambiance servie par la base maison ------------------------------------
@@ -719,7 +735,12 @@ async function fetchAmbianceTracks(libelle, besoin = 8, budget = 18) {
         // Deezer renvoie les morceaux par popularité décroissante. On puise
         // dans les huit premiers : un blind test se joue sur des chansons que
         // l'on reconnaît, pas sur la face B d'un album de 1954.
-        return shuffle(pistes.slice(0, 8)).slice(0, 4);
+        //
+        // Le nombre par artiste s'ajuste à la longueur de la partie : sur
+        // quinze morceaux, quatre titres de Florent Pagny d'affilée, c'est
+        // trop.
+        const parArtiste = Math.min(4, Math.max(2, Math.ceil(besoin / 6)));
+        return shuffle(pistes.slice(0, 8)).slice(0, parArtiste);
       } catch { return []; }
     }));
     out.push(...lots.flat());
