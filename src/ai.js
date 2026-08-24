@@ -47,14 +47,21 @@ RÈGLES :
 2. Le champ "answer" est un NOMBRE brut, sans espace, sans symbole, sans séparateur de milliers : écris 1250000 et non « 1,25 million » ni « 1 250 000 ».
 3. N'utilise PAS de champ "options" : il n'y a pas de propositions, les joueurs devinent le nombre.
 4. Choisis des ordres de grandeur devinables en soirée, et des faits stables (pas un prix qui change chaque mois).
+5. NOMBRES ENTIERS et supérieurs à 10. Faire deviner « 36,5 » ou « 1,6 » ne marche pas : tout le monde propose la même chose et il n'y a plus de jeu.
+6. Chaque question porte sur une chose DIFFÉRENTE. Six questions sur la température du corps, c'est six fois la même question. Varie les domaines : distances, durées, poids, quantités, populations, records.
+7. Jamais deux questions dont la réponse est le même nombre.
 Format EXACT : {"question":"...","answer":<nombre>,"explanation":"..."}`,
     trueFalse: `Chaque question est une affirmation Vrai/Faux : "options" doit être exactement ["Vrai","Faux"] (ou ["True","False"] en anglais) et "correct" est 0 (vrai) ou 1 (faux).`,
     emoji: `C'est un quiz DEVINETTE EMOJI : le champ "question" contient UNIQUEMENT une suite de 3 à 6 emojis représentant un film, une chanson, un livre, une expression ou un objet lié au sujet (ex: "🦁👑🌍" pour Le Roi Lion). Les 4 "options" sont des titres/noms plausibles, une seule correcte. Varie la position de la bonne réponse.`,
     riddle: `C'est un quiz "QUI SUIS-JE ?" : le champ "question" contient 3 indices progressifs (du plus vague au plus précis) séparés par " • ", se terminant par "Qui suis-je ?". Les 4 "options" sont des personnes/personnages/objets plausibles, une seule correcte. Varie la position de la bonne réponse.`,
-    chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.`,
+    chrono: `C'est un quiz CHRONOLOGIE : chaque question demande lequel de 4 événements, œuvres, inventions ou personnages est arrivé/né/sorti EN PREMIER (ou en dernier — varie). Le champ "question" précise clairement ce qu'on cherche (ex: "Lequel de ces films est sorti en premier ?"). Une seule bonne réponse, position variée.
+Les 4 options sont des ÉVÉNEMENTS ou des ŒUVRES à situer dans le temps, jamais des noms de personnes à identifier : « Qui a été nommé consul en premier ? » est une question de culture générale déguisée, pas une chronologie.
+Chaque question compare un LOT D'OPTIONS DIFFÉRENT : ne repose pas la même question à l'envers avec les quatre mêmes propositions.`,
     intru: `C'est un quiz TROUVE L'INTRUS : chaque "question" commence par "Trouve l'intrus :" suivi du thème (ex: "Trouve l'intrus : ces artistes ont tous gagné un Grammy… sauf un !"). Les 4 "options" partagent toutes un point commun SAUF une (l'intrus = la bonne réponse). L'explication révèle le point commun.`,
     mixed: `C'est un MIX SURPRISE : alterne les styles entre QCM classique, affirmation Vrai/Faux (options ["Vrai","Faux"], correct 0 ou 1), devinette emoji (question = uniquement des emojis), "Qui suis-je ?" (3 indices progressifs), "Trouve l'intrus", citation ("Qui a dit ça ?") et "En quelle année ?". Aucun style ne doit se répéter plus de 2 fois d'affilée.`,
-    quote: `C'est un quiz QUI A DIT ÇA ? : chaque "question" est une citation ou réplique célèbre RÉELLE entre guillemets « », liée au sujet. Les 4 "options" sont des personnes/personnages plausibles ; une seule a réellement dit ou écrit cette phrase. L'explication donne le contexte de la citation.`,
+    quote: `C'est un quiz QUI A DIT ÇA ? : chaque "question" est une citation ou réplique célèbre RÉELLE, entre guillemets « », liée au sujet. Les 4 "options" sont des personnes/personnages plausibles ; une seule a réellement dit ou écrit cette phrase. L'explication donne le contexte de la citation.
+INTERDIT ABSOLU : transformer une phrase descriptive en citation. « Le cinéma comique français regroupe l'ensemble des films comiques » n'est pas une citation, c'est une définition — l'attribuer à un acteur est un mensonge. La phrase doit avoir été PRONONCÉE ou ÉCRITE par quelqu'un : réplique de film, mot historique, vers, phrase de chanson.
+Si tu ne connais pas de citation authentique sur ce sujet, produis moins de questions plutôt que d'en inventer.`,
     anagram: `C'est un quiz ANAGRAMMES : chaque "question" est de la forme "Remets les lettres dans l'ordre : X-Y-Z" où les lettres MAJUSCULES séparées par des tirets sont le VRAI mélange des lettres d'un mot ou nom lié au sujet. Les 4 "options" sont des mots plausibles de longueur similaire ; une seule correspond exactement à ces lettres. Vérifie soigneusement que les lettres correspondent.`,
     year: `C'est un quiz EN QUELLE ANNÉE ? : chaque question demande l'année précise d'un événement marquant lié au sujet (sortie d'un film, victoire, invention…). Les 4 "options" sont des années proches et crédibles (ex: "1994","1996","1998","2001") ; une seule est exacte.`,
     math: `C'est un quiz CALCUL RAPIDE spécial soirée : chaque "question" est un petit calcul mental amusant et accessible (additions, multiplications simples, pourcentages faciles, petites énigmes numériques), si possible habillé avec le thème du sujet. 4 "options" numériques proches ; une seule correcte.`,
@@ -208,6 +215,16 @@ export function melangerOptions(q, type) {
   return { ...q, options, correct: options.indexOf(bonne) };
 }
 
+// Questions « de dictionnaire » : la consigne les interdit depuis longtemps,
+// le modèle les produit quand même quand il travaille sur un article
+// d'encyclopédie (« En quelle année le taxon des animaux a-t-il été créé par
+// Linné ? »). On ne se contente donc plus de le demander.
+const QUESTION_DICTIONNAIRE = /\btaxons?\b|\bnomenclature\b|\bsigle\b|\bacronyme\b|étymologi|que signifie l['’]abr|nom scientifique|nom latin|\ben latin\b|\bclades?\b|\bbinomin/i;
+
+// Une devinette emoji doit être faite d'emojis. Constaté en production : une
+// question dont l'énoncé était le seul caractère « ¡ ».
+const UN_EMOJI = /\p{Extended_Pictographic}/gu;
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -244,6 +261,13 @@ function normalize(raw, type) {
       if (correct === null && typeof q.answer === 'boolean') correct = q.answer ? 0 : 1;
     }
     if (!options || options.length < 2 || correct === null || correct < 0 || correct >= options.length) continue;
+    // « Qui a dit ça ? » n'a de sens que si la question EST une citation.
+    // Nourri d'articles encyclopédiques, le modèle transformait des phrases
+    // descriptives en fausses citations : « Le cinéma comique français
+    // regroupe l'ensemble des films comiques français », attribué à Max Linder.
+    if (type === 'quote' && !/[«"“][^»"”]{8,}[»"”]/.test(q.question)) continue;
+    if (QUESTION_DICTIONNAIRE.test(q.question)) continue;
+    if (type === 'emoji' && (q.question.match(UN_EMOJI) || []).length < 2) continue;
     // Anti-ambiguïté : aucune option ne doit être le doublon typographique d'une autre
     if (new Set(options.map(optionKey)).size !== options.length) continue;
     if (options.some((o) => !String(o).trim())) continue;
@@ -553,6 +577,10 @@ export async function generateAnagramQuestions(env, { topic, count = 8, language
   words = [...new Set(words.filter((w) => w.length >= 5 && w.length <= 12))];
   if (words.length < n) words = [...words, ...FALLBACK_WORDS.filter((w) => !words.includes(w))];
 
+  // Signature = les lettres triées. Deux mots de même signature sont anagrammes
+  // l'un de l'autre : ils ne peuvent pas cohabiter dans une même question.
+  const signature = (w) => stripAccents(w).split('').sort().join('');
+
   const out = [];
   for (const word of words) {
     if (out.length >= n) break;
@@ -560,8 +588,20 @@ export async function generateAnagramQuestions(env, { topic, count = 8, language
     const shown = scrambled(word, used);
     if (!shown) continue; // lettres toutes identiques etc.
     used.add(shown);
-    const distractors = [];
-    for (let i = 0; i < 3; i++) {
+
+    // Les leurres sont de VRAIS MOTS, pas des suites de lettres.
+    //
+    // Avant, les trois mauvaises propositions étaient d'autres mélanges du même
+    // mot : « CUISINIER » face à « INIEIRSCU », « SIINUERIC », « EIIUINSCR ».
+    // Aucun besoin de résoudre l'anagramme, il suffisait de repérer le seul mot
+    // prononçable. Le jeu ne demandait plus rien.
+    const sig = signature(word);
+    const reels = melanger(words.filter((w) => w !== word && signature(w) !== sig))
+      .sort((a, b) => Math.abs(a.length - word.length) - Math.abs(b.length - word.length))
+      .slice(0, 3);
+    const distractors = [...reels];
+    // Si le sujet n'a pas fourni assez de mots, on complète à l'ancienne.
+    while (distractors.length < 3) {
       const d = scrambled(word, used);
       if (!d) break;
       used.add(d);
@@ -682,7 +722,11 @@ export async function generateQuestions(env, opts) {
   const count = Math.min(Math.max(parseInt(opts.count) || 5, 1), 20);
   // On en demande quelques-unes de plus : les contrôles en écartent toujours une partie,
   // et l'utilisateur doit recevoir le nombre de questions qu'il a demandé.
-  const asked = Math.min(count + 3, 20);
+  // Vrai/Faux perd davantage à la relecture : avec seulement deux propositions,
+  // la contre-épreuve à l'aveugle écarte toute affirmation dont la machine
+  // n'est pas certaine. Constaté en production : 2 questions rendues sur 6
+  // demandées. On en fabrique donc le double.
+  const asked = Math.min(opts.type === 'trueFalse' ? count * 2 : count + 3, 20);
   const prompt = buildPrompt({ ...opts, count: asked });
 
   // Budget de temps : mieux vaut un quiz un peu plus court qu'une génération qui n'aboutit jamais.

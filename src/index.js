@@ -43,7 +43,15 @@ const auth = requireAuth(secret);
 
 // Types dont la réponse peut être confrontée à une source encyclopédique.
 // (Vrai/Faux, emoji, « qui suis-je », mix : la réponse n'est pas un extrait de texte → non vérifiables)
-const VERIFIABLE_TYPES = new Set(['multipleChoice', 'year', 'quote', 'chrono', 'intru']);
+// Styles ancrés dans des articles encyclopédiques.
+//
+// « Qui a dit ça ? » en a été retiré : forcé de tout puiser dans un article, le
+// modèle transformait les phrases de l'article en fausses citations (« Le
+// cinéma comique français regroupe l'ensemble des films comiques », attribué à
+// Max Linder). Les citations célèbres relèvent de la mémoire commune, pas d'un
+// article : ce style passe par la contre-épreuve à l'aveugle, qui vérifie
+// l'attribution.
+const VERIFIABLE_TYPES = new Set(['multipleChoice', 'year', 'chrono', 'intru']);
 
 const FREE_AI_PER_MONTH = 3;
 const FREE_MAX_PLAYERS = 10;
@@ -968,10 +976,21 @@ async function dedupQuiz(questions) {
     const marques = await fingerprintAll(questions, '');
     const vusFp = new Set();
     const vusAk = new Set();
+    const vusNombres = new Set();
     const gardees = [];
     for (let i = 0; i < marques.length; i++) {
       const q = marques[i];
       if (q.audioUrl) { gardees.push(questions[i]); continue; }
+      // « Le juste prix » : deux questions dont la réponse est le même nombre
+      // font deux fois la même manche. Constaté en production : « 1,6 » deux
+      // fois de suite sur un quiz de six questions.
+      if (Array.isArray(q.options) && q.options.length === 1) {
+        const valeur = String(q.options[0]).trim();
+        if (vusNombres.has(valeur)) continue;
+        vusNombres.add(valeur);
+        gardees.push(questions[i]);
+        continue;
+      }
       if (vusFp.has(q.fp) || (q.ak && vusAk.has(q.ak))) continue;
       vusFp.add(q.fp); if (q.ak) vusAk.add(q.ak);
       gardees.push(questions[i]);
