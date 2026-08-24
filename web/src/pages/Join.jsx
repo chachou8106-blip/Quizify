@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import confetti from 'canvas-confetti';
 import { wsUrl } from '../api';
+import { bandeauConnexion, useLiveSocket } from '../socket';
 import { Link } from 'react-router-dom';
 import ShareButtons from '../components/ShareButtons';
 
@@ -22,60 +23,64 @@ export default function Join() {
   const [podium, setPodium] = useState(null);
   const [reward, setReward] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
-  const wsRef = useRef(null);
+  // Pseudo et code figés au moment où l'on rejoint : ils servent d'adresse de
+  // reconnexion. Tant qu'ils ne changent pas, la connexion se rétablit seule.
+  const [entree, setEntree] = useState(pinParam && localStorage.getItem('qzf-nick') ? { pin: pinParam, nom: localStorage.getItem('qzf-nick') } : null);
   const timerRef = useRef(null);
 
-  useEffect(() => () => { wsRef.current?.close(); clearInterval(timerRef.current); }, []);
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  const url = useMemo(
+    () => (entree ? wsUrl(entree.pin, { role: 'player', name: entree.nom }) : null),
+    [entree],
+  );
+
+  const surMessage = useCallback((m) => {
+    if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }
+    if (m.t === 'question') {
+      setQ(m); setMyAnswer(null); setReveal(null); setProposition(''); setState('question');
+      clearInterval(timerRef.current);
+      const tick = () => setSecondsLeft(Math.max(0, Math.ceil((m.endsAt - Date.now()) / 1000)));
+      tick();
+      timerRef.current = setInterval(tick, 250);
+    }
+    if (m.t === 'answered') { setMyAnswer(m.i ?? m.guess); setState('answered'); }
+    if (m.t === 'reveal') { clearInterval(timerRef.current); setReveal(m); setState('reveal'); }
+    if (m.t === 'reward') setReward(m);
+    if (m.t === 'podium') {
+      clearInterval(timerRef.current);
+      if (m.title) setGame((g) => ({ ...g, title: m.title }));
+      setPodium(m.leaderboard); setState('podium');
+      const rang = m.leaderboard.findIndex((p) => p.name === (entree?.nom || ''));
+      if (rang >= 0 && rang < 3) confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
+    }
+  }, [entree]);
+
+  const { etat, envoyer } = useLiveSocket(url, surMessage, !!entree);
+
+  useEffect(() => {
+    if (!entree) return;
+    if (etat === 'ouvert') { setError(''); setState((s) => (s === 'form' ? 'lobby' : s)); }
+    // Le navigateur ne transmet pas le motif d'un refus : on énumère les trois
+    // causes possibles plutôt que de laisser chercher.
+    if (etat === 'echec') {
+      setError('Impossible de rejoindre : vérifie le code, essaie un autre pseudo (il est peut-être déjà pris), ou la partie est complète.');
+      setState('form');
+      setEntree(null);
+    }
+  }, [etat, entree]);
 
   const connect = (e) => {
     e?.preventDefault();
     if (!/^\d{6}$/.test(pin) || !name.trim()) { setError('Code à 6 chiffres et pseudo requis'); return; }
     localStorage.setItem('qzf-nick', name.trim());
     setError('');
-    const ws = new WebSocket(wsUrl(pin, { role: 'player', name: name.trim() }));
-    wsRef.current = ws;
-    ws.onopen = () => setState((s) => (s === 'form' ? 'lobby' : s));
-    ws.onclose = (ev) => {
-      if (ev.code === 1000) return;
-      setState((s) => (s === 'form' ? 'form' : s));
-      if (ev.reason) setError(ev.reason);
-    };
-    // Le navigateur ne transmet pas le motif d'un refus de connexion : on
-    // énumère donc les trois causes possibles plutôt que de laisser chercher.
-    ws.onerror = () => setError('Impossible de rejoindre : vérifie le code, essaie un autre pseudo (il est peut-être déjà pris), ou la partie est complète.');
-    ws.onmessage = (ev) => {
-      const m = JSON.parse(ev.data);
-      if (m.t === 'lobby') { setGame(m); if (m.phase === 'lobby') setState('lobby'); }
-      if (m.t === 'question') {
-        setQ(m); setMyAnswer(null); setReveal(null); setProposition(''); setState('question');
-        clearInterval(timerRef.current);
-        const tick = () => setSecondsLeft(Math.max(0, Math.ceil((m.endsAt - Date.now()) / 1000)));
-        tick();
-        timerRef.current = setInterval(tick, 250);
-      }
-      if (m.t === 'answered') { setMyAnswer(m.i ?? m.guess); setState('answered'); }
-      if (m.t === 'reveal') {
-        clearInterval(timerRef.current);
-        setReveal(m); setState('reveal');
-      }
-      if (m.t === 'reward') setReward(m);
-      if (m.t === 'podium') {
-        clearInterval(timerRef.current);
-        if (m.title) setGame((g) => ({ ...g, title: m.title }));
-        setPodium(m.leaderboard); setState('podium');
-        const rank = m.leaderboard.findIndex((p) => p.name === name.trim());
-        if (rank >= 0 && rank < 3) confetti({ particleCount: 200, spread: 90, origin: { y: 0.6 } });
-      }
-    };
+    setEntree({ pin, nom: name.trim() });
   };
-
-  useEffect(() => {
-    if (pinParam && name && state === 'form') connect();
-  }, []); // eslint-disable-line
 
   const answer = (i) => {
     if (myAnswer !== null || state !== 'question') return;
-    wsRef.current?.send(JSON.stringify({ t: 'answer', i }));
+    envoyer({ t: 'answer', i });
     setMyAnswer(i);
     setState('answered');
     navigator.vibrate?.(40);
@@ -87,11 +92,18 @@ export default function Join() {
     if (myAnswer !== null || state !== 'question') return;
     const valeur = Number(String(proposition).replace(',', '.'));
     if (!Number.isFinite(valeur) || proposition === '') return;
-    wsRef.current?.send(JSON.stringify({ t: 'answer', i: valeur }));
+    envoyer({ t: 'answer', i: valeur });
     setMyAnswer(valeur);
     setState('answered');
     navigator.vibrate?.(40);
   };
+
+  const alerte = bandeauConnexion(etat);
+  const bandeau = entree && alerte && etat !== 'echec' && (
+    <div className="rounded-2xl border-2 border-sunny/60 bg-sunny/15 px-4 py-2 text-center font-display font-extrabold text-sunny">
+      {alerte.texte}
+    </div>
+  );
 
   if (state === 'form') {
     return (
@@ -112,6 +124,7 @@ export default function Join() {
   if (state === 'lobby') {
     return (
       <div className="mx-auto max-w-md space-y-6 text-center">
+        {bandeau}
         <div className="animate-pulseBig text-6xl">🕺💃</div>
         <h1 className="font-display text-3xl font-extrabold">Tu es dans la partie !</h1>
         <div className="card">
@@ -126,6 +139,7 @@ export default function Join() {
   if (state === 'question' && q) {
     return (
       <div className="mx-auto max-w-md space-y-4">
+        {bandeau}
         <div className="flex items-center justify-between font-display font-extrabold">
           <span className="rounded-full bg-grape px-4 py-1 text-white">{q.idx + 1} / {q.total}</span>
           <span className={`rounded-full px-4 py-1 text-white ${secondsLeft <= 5 ? 'animate-pulseBig bg-cherry' : 'bg-slate-700'}`}>⏱ {secondsLeft}s</span>
@@ -163,6 +177,7 @@ export default function Join() {
   if (state === 'answered') {
     return (
       <div className="mx-auto max-w-md space-y-6 pt-16 text-center">
+        {bandeau}
         <div className="animate-wiggle text-7xl">🤞</div>
         <h1 className="font-display text-3xl font-extrabold">Réponse envoyée !</h1>
         <p className="text-lg font-semibold text-white/60">On attend les autres…</p>
@@ -171,12 +186,12 @@ export default function Join() {
   }
 
   if (state === 'reveal' && reveal) {
-    const mine = reveal.leaderboard.find((p) => p.name === name.trim());
-    const rank = reveal.leaderboard.findIndex((p) => p.name === name.trim()) + 1;
+    const mine = reveal.leaderboard.find((p) => p.name === (entree?.nom || name.trim()));
+    const rank = reveal.leaderboard.findIndex((p) => p.name === (entree?.nom || name.trim())) + 1;
     // « Le juste prix » : il n'y a ni bonne ni mauvaise réponse, seulement un écart.
     const chiffre = reveal.bonneValeur !== null && reveal.bonneValeur !== undefined;
-    const maLigne = chiffre ? reveal.propositions?.find((x) => x.name === name.trim()) : null;
-    const monRang = chiffre ? (reveal.propositions || []).findIndex((x) => x.name === name.trim()) : -1;
+    const maLigne = chiffre ? reveal.propositions?.find((x) => x.name === (entree?.nom || name.trim())) : null;
+    const monRang = chiffre ? (reveal.propositions || []).findIndex((x) => x.name === (entree?.nom || name.trim())) : -1;
     const good = chiffre ? monRang === 0 : myAnswer === reveal.correct;
     if (good) { navigator.vibrate?.([50, 40, 50]); }
 
@@ -219,7 +234,7 @@ export default function Join() {
   }
 
   if (state === 'podium' && podium) {
-    const rank = podium.findIndex((p) => p.name === name.trim()) + 1;
+    const rank = podium.findIndex((p) => p.name === (entree?.nom || name.trim())) + 1;
     return (
       <div className="mx-auto max-w-md space-y-6 text-center">
         <div className="text-7xl">🏁</div>
@@ -228,7 +243,7 @@ export default function Join() {
         </h1>
         <div className="card space-y-2 text-left">
           {podium.slice(0, 10).map((p, i) => (
-            <div key={p.name} className={`flex items-center justify-between rounded-xl px-4 py-2 font-bold ${p.name === name.trim() ? 'bg-grape/10 text-grape-light' : ''}`}>
+            <div key={p.name} className={`flex items-center justify-between rounded-xl px-4 py-2 font-bold ${p.name === (entree?.nom || name.trim()) ? 'bg-grape/10 text-grape-light' : ''}`}>
               <span>{['🥇', '🥈', '🥉'][i] || `${i + 1}.`} {p.name}</span>
               <span>{p.score} pts</span>
             </div>

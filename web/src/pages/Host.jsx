@@ -1,24 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import confetti from 'canvas-confetti';
-import { wsUrl } from '../api';
+import { nomDuCompte, wsUrl } from '../api';
 import { copier } from '../copie';
+import { bandeauConnexion, useLiveSocket } from '../socket';
 import AudioClip from '../components/AudioClip';
 import ShareButtons from '../components/ShareButtons';
-import { useAuth } from '../store';
 
 const SHAPES = ['🔺', '🔷', '🟡', '🟢'];
 const COLORS = ['bg-cherry', 'bg-sky2', 'bg-sunny text-white', 'bg-minty'];
 
 export default function Host() {
   const { pin } = useParams();
-  const { user, ready } = useAuth();
   const hostKey = sessionStorage.getItem(`host-${pin}`);
   const [state, setState] = useState('lobby');
   // L'animateur joue par défaut : c'est le cas le plus fréquent en soirée, et
   // cela lui garantit exactement le même traitement qu'aux autres joueurs.
   const [hostPlays, setHostPlays] = useState(true);
-  const [monNom, setMonNom] = useState('Animateur');
+  const nomVoulu = useMemo(() => (nomDuCompte() || 'Animateur').trim().slice(0, 20) || 'Animateur', []);
+  const [monNom, setMonNom] = useState(nomVoulu);
   const [myAnswer, setMyAnswer] = useState(null);
   const [monNombre, setMonNombre] = useState('');
   const [copie, setCopie] = useState(null); // null | 'ok' | 'echec'
@@ -29,60 +29,67 @@ export default function Host() {
   const [answered, setAnswered] = useState({ answered: 0, total: 0 });
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [error, setError] = useState('');
-  const wsRef = useRef(null);
   const timerRef = useRef(null);
   const phaseRef = useRef('lobby');
+  const envoyerRef = useRef(() => false);
 
-  useEffect(() => {
-    // On attend de connaître le nom du compte : le serveur inscrit l'animateur
-    // comme joueur dès la connexion, avec le nom passé ici.
-    if (!hostKey || !ready) return;
-    const nom = (user?.name || 'Animateur').trim().slice(0, 20) || 'Animateur';
-    setMonNom(nom);
-    const ws = new WebSocket(wsUrl(pin, { role: 'host', key: hostKey, name: nom }));
-    wsRef.current = ws;
-    ws.onerror = () => setError('Connexion impossible');
-    ws.onmessage = (ev) => {
-      const m = JSON.parse(ev.data);
-      if (m.t === 'lobby') {
-        setGame(m);
-        // Statut restauré depuis le serveur : un rechargement de page ne fait
-        // plus perdre sa place de joueur à l'animateur.
-        setHostPlays(!!m.hostName);
-        if (m.hostName) setMonNom(m.hostName);
-        if (m.phase === 'lobby') setState('lobby');
-      }
-      if (m.t === 'hostJoined') { setHostPlays(true); setMonNom(m.name); }
-      if (m.t === 'hostLeft') setHostPlays(false);
-      if (m.t === 'answered') setMyAnswer(m.i ?? m.guess);
-      if (m.t === 'question') {
-        setQ(m); setReveal(null); setAnswered({ answered: 0, total: 0 }); setMyAnswer(null); setState('question');
-        phaseRef.current = 'question';
-        clearInterval(timerRef.current);
-        const tick = () => {
-          const left = Math.max(0, Math.ceil((m.endsAt - Date.now()) / 1000));
-          setSecondsLeft(left);
-          if (left === 0) {
-            clearInterval(timerRef.current);
-            if (phaseRef.current === 'question') wsRef.current?.send(JSON.stringify({ t: 'next' }));
-          }
-        };
-        tick();
-        timerRef.current = setInterval(tick, 250);
-      }
-      if (m.t === 'answerCount') setAnswered(m);
-      if (m.t === 'reveal') { phaseRef.current = 'reveal'; clearInterval(timerRef.current); setReveal(m); setState('reveal'); }
-      if (m.t === 'podium') {
-        phaseRef.current = 'podium';
-        clearInterval(timerRef.current);
-        setPodium(m.leaderboard); setState('podium');
-        confetti({ particleCount: 250, spread: 100, origin: { y: 0.5 } });
-      }
-    };
-    return () => { ws.close(); clearInterval(timerRef.current); };
-  }, [pin, hostKey, ready, user?.name]);
+  const url = useMemo(
+    () => (hostKey ? wsUrl(pin, { role: 'host', key: hostKey, name: nomVoulu }) : null),
+    [pin, hostKey, nomVoulu],
+  );
 
-  const send = (t) => wsRef.current?.send(JSON.stringify({ t }));
+  const surMessage = useCallback((m) => {
+    if (m.t === 'lobby') {
+      setGame(m);
+      // Statut restauré depuis le serveur : un rechargement de page, une mise
+      // en veille ou une coupure réseau ne font plus perdre sa place de joueur
+      // à l'animateur.
+      setHostPlays(!!m.hostName);
+      if (m.hostName) setMonNom(m.hostName);
+      if (m.phase === 'lobby') { phaseRef.current = 'lobby'; setState('lobby'); }
+    }
+    if (m.t === 'hostJoined') { setHostPlays(true); setMonNom(m.name); }
+    if (m.t === 'hostLeft') setHostPlays(false);
+    if (m.t === 'answered') setMyAnswer(m.i ?? m.guess);
+    if (m.t === 'question') {
+      setQ(m); setReveal(null); setAnswered({ answered: 0, total: 0 }); setMyAnswer(null); setState('question');
+      phaseRef.current = 'question';
+      clearInterval(timerRef.current);
+      const tick = () => {
+        const left = Math.max(0, Math.ceil((m.endsAt - Date.now()) / 1000));
+        setSecondsLeft(left);
+        if (left === 0) {
+          clearInterval(timerRef.current);
+          if (phaseRef.current === 'question') envoyerRef.current({ t: 'next' });
+        }
+      };
+      tick();
+      timerRef.current = setInterval(tick, 250);
+    }
+    if (m.t === 'answerCount') setAnswered(m);
+    if (m.t === 'reveal') { phaseRef.current = 'reveal'; clearInterval(timerRef.current); setReveal(m); setState('reveal'); }
+    if (m.t === 'podium') {
+      phaseRef.current = 'podium';
+      clearInterval(timerRef.current);
+      setPodium(m.leaderboard); setState('podium');
+      confetti({ particleCount: 250, spread: 100, origin: { y: 0.5 } });
+    }
+  }, []);
+
+  const { etat, envoyer } = useLiveSocket(url, surMessage, !!hostKey);
+  envoyerRef.current = envoyer;
+  useEffect(() => () => clearInterval(timerRef.current), []);
+
+  const send = (t) => envoyer({ t });
+  const alerte = bandeauConnexion(etat);
+  // Toujours visible quand la connexion n'est pas bonne : sans ce bandeau,
+  // l'animateur cliquait sur des boutons qui ne faisaient rien, sans savoir
+  // pourquoi.
+  const bandeau = alerte && (
+    <div className={`rounded-2xl border-2 px-4 py-2 text-center font-display font-extrabold ${alerte.ton === 'cherry' ? 'border-cherry/60 bg-cherry/15 text-cherry' : 'border-sunny/60 bg-sunny/15 text-sunny'}`}>
+      {alerte.texte}
+    </div>
+  );
 
   if (!hostKey) {
     return (
@@ -98,6 +105,7 @@ export default function Host() {
   if (state === 'lobby') {
     return (
       <div className="mx-auto max-w-2xl space-y-6 text-center">
+        {bandeau}
         <h1 className="font-display text-3xl font-extrabold">« {game.title || '…'} »</h1>
         <div className="card border-4 border-grape">
           <p className="font-display text-xl font-extrabold text-white/60">Rejoignez sur <span className="text-grape-light">{location.host}/join</span> avec le code :</p>
@@ -155,14 +163,19 @@ export default function Host() {
               : 'Tu ne réponds pas et tu n’apparais pas au classement.'}
           </p>
           <button
-            onClick={() => wsRef.current?.send(JSON.stringify(hostPlays ? { t: 'hostLeave' } : { t: 'hostJoin', name: monNom }))}
+            onClick={() => envoyer(hostPlays ? { t: 'hostLeave' } : { t: 'hostJoin', name: monNom })}
             className="btn-ghost mt-3 !px-4 !py-2 !text-sm"
           >
             {hostPlays ? '🎙️ Finalement, j’anime sans jouer' : '🙋 Finalement, je joue aussi'}
           </button>
         </div>
-        <button onClick={() => send('start')} disabled={(game.players || []).length === 0}
-          className="btn-primary w-full text-2xl disabled:opacity-40">🚀 Lancer la partie !</button>
+        <button
+          onClick={() => send('start')}
+          disabled={etat !== 'ouvert' || (game.players || []).length === 0}
+          className="btn-primary w-full text-2xl disabled:opacity-40"
+        >
+          {etat !== 'ouvert' ? '⏳ Reconnexion en cours…' : '🚀 Lancer la partie !'}
+        </button>
       </div>
     );
   }
@@ -170,6 +183,7 @@ export default function Host() {
   if (state === 'question' && q) {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
+        {bandeau}
         <div className="flex items-center justify-between font-display text-xl font-extrabold">
           <span className="rounded-full bg-grape px-4 py-1 text-white">Question {q.idx + 1} / {q.total}</span>
           <span className={`rounded-full px-5 py-1 text-white ${secondsLeft <= 5 ? 'animate-pulseBig bg-cherry' : 'bg-slate-700'}`}>⏱ {secondsLeft}s</span>
@@ -192,7 +206,7 @@ export default function Host() {
                   e.preventDefault();
                   const v = Number(String(monNombre).replace(',', '.'));
                   if (!Number.isFinite(v) || monNombre === '') return;
-                  wsRef.current?.send(JSON.stringify({ t: 'answer', i: v }));
+                  envoyer({ t: 'answer', i: v });
                   navigator.vibrate?.(40);
                 }}
                 className="mx-auto mt-4 flex max-w-sm gap-2"
@@ -218,7 +232,7 @@ export default function Host() {
               <button
                 key={i}
                 disabled={myAnswer !== null}
-                onClick={() => { wsRef.current?.send(JSON.stringify({ t: 'answer', i })); navigator.vibrate?.(40); }}
+                onClick={() => { envoyer({ t: 'answer', i }); navigator.vibrate?.(40); }}
                 className={`${COLORS[i % 4]} rounded-3xl p-4 text-left font-display text-xl font-extrabold text-white shadow-pop transition-all active:translate-y-1 active:shadow-none ${myAnswer !== null && myAnswer !== i ? 'opacity-40' : ''} ${myAnswer === i ? 'ring-4 ring-slate-800' : ''}`}
               >
                 <span className="mr-2 text-3xl">{SHAPES[i % 4]}</span>{o}
@@ -242,6 +256,7 @@ export default function Host() {
   if (state === 'reveal' && reveal) {
     return (
       <div className="mx-auto max-w-3xl space-y-5">
+        {bandeau}
         <h2 className="text-center font-display text-2xl font-extrabold">✅ La bonne réponse était :</h2>
         {reveal.propositions ? (
           <div className="space-y-3">

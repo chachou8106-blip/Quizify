@@ -141,6 +141,10 @@ export class GameRoom extends DurableObject {
   async webSocketMessage(ws, raw) {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    // Battement de cœur des clients : certains réseaux mobiles ferment les
+    // connexions restées silencieuses une minute. On répond avant tout le
+    // reste, sans toucher au stockage.
+    if (msg.t === 'ping') { try { ws.send('{"t":"pong"}'); } catch {} return; }
     const att = ws.deserializeAttachment() || {};
     const game = await this.ctx.storage.get('game');
     if (!game) return;

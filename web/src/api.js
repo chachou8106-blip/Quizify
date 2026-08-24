@@ -20,6 +20,20 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Le nom du compte voyage déjà dans le jeton. Le lire là évite d'attendre un
+// aller-retour réseau avant d'ouvrir la partie : sur un téléphone en 4G
+// capricieuse, cette attente pouvait laisser l'écran d'animation sans
+// connexion, donc sans joueurs affichés et sans bouton actif.
+export function nomDuCompte() {
+  try {
+    const t = getToken();
+    if (!t) return null;
+    const brut = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const charge = JSON.parse(decodeURIComponent(escape(atob(brut))));
+    return charge?.name || null;
+  } catch { return null; }
+}
+
 export function wsUrl(pin, params) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const q = new URLSearchParams(params).toString();
