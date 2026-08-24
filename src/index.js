@@ -533,6 +533,15 @@ app.post('/api/ai/generate', auth, async (c) => {
     }
   }
 
+  // Zéro question n'est pas un quiz court, c'est un échec : on le dit
+  // franchement au lieu de renvoyer un aperçu vide avec un avertissement.
+  if (questions.length === 0) {
+    return c.json({
+      error: 'aucune_question',
+      message: "Aucune question n'a passé les contrôles sur ce sujet. Essaie un sujet plus large, un autre style de quiz, ou relance : ce n'est pas facturé.",
+    }, 422);
+  }
+
   // Et on le DIT quand le compte n'y est pas, au lieu de laisser croire que
   // c'est normal.
   const manque = totalWanted - questions.length;

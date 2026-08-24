@@ -225,6 +225,18 @@ const QUESTION_DICTIONNAIRE = /\btaxons?\b|\bnomenclature\b|\bsigle\b|\bacronyme
 // question dont l'énoncé était le seul caractère « ¡ ».
 const UN_EMOJI = /\p{Extended_Pictographic}/gu;
 
+// L'explication s'adresse à des invités, pas à un correcteur. Le modèle,
+// nourri d'extraits encyclopédiques, préfixait ses explications de « Selon la
+// source, … » : cette mécanique interne n'a rien à faire à l'écran.
+function nettoyerExplication(brut) {
+  if (typeof brut !== 'string') return '';
+  const propre = brut.trim()
+    .replace(/^(selon|d['’]après|comme l['’]indique|conformément à)\s+(la|les|le)\s+(source|sources|document|documents|extrait|extraits|texte)s?\s*,?\s*/i, '')
+    .replace(/\s*\((?:selon|d['’]après)\s+(?:la|les)\s+sources?\)\s*/gi, ' ')
+    .trim();
+  return cleanMath(propre.charAt(0).toUpperCase() + propre.slice(1));
+}
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -275,7 +287,7 @@ function normalize(raw, type) {
       question: cleanMath(q.question.trim()),
       options: options.map(cleanMath),
       correct,
-      explanation: typeof q.explanation === 'string' ? cleanMath(q.explanation.trim()) : '',
+      explanation: nettoyerExplication(q.explanation),
     });
   }
   if (out.length === 0) throw new Error('no-valid-questions');
@@ -761,7 +773,14 @@ export async function generateQuestions(env, opts) {
           if (verified.length >= Math.min(3, questions.length)) questions = verified;
         } catch { /* en cas d'échec de la relecture, on garde la version initiale */ }
         // Contre-épreuve à l'aveugle : dernier filet avant affichage.
-        if (Date.now() - started < 45000) questions = await crossCheck(env, questions);
+        //
+        // Sauf en Vrai/Faux : avec deux propositions seulement, une machine qui
+        // répond au hasard tombe juste une fois sur deux. Le filtre y écarte
+        // donc de bonnes affirmations et en laisse passer de mauvaises. Constaté
+        // en production : 0 question rendue sur 6 demandées.
+        if (opts.type !== 'trueFalse' && Date.now() - started < 45000) {
+          questions = await crossCheck(env, questions);
+        }
       }
       // Le quiz parle-t-il bien du sujet demandé ? (valable pour tous les types)
       if (!opts.personalFacts && opts.topic && Date.now() - started < 50000) {
