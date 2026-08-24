@@ -182,6 +182,32 @@ function optionKey(s) {
     .toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// Mélange sincère (Fisher-Yates). `[...].sort(() => Math.random() - 0.5)`
+// n'est PAS un mélange : il laisse le premier élément trop souvent devant.
+function melanger(liste) {
+  const a = [...liste];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// La position de la bonne réponse ne doit jamais être devinable.
+//
+// Le modèle a beau recevoir la consigne « varie la position », il place
+// l'intrus en dernier de façon systématique : un quiz « Trouve l'intrus » de
+// 18 questions sur Harry Potter avait sa réponse en quatrième position
+// 18 fois sur 18. Au bout de deux questions, la soirée était finie.
+// On ne le demande donc plus : on le fait.
+export function melangerOptions(q, type) {
+  if (type === 'trueFalse') return q;          // Vrai reste avant Faux
+  if (!Array.isArray(q.options) || q.options.length < 3) return q;
+  const bonne = q.options[q.correct];
+  const options = melanger(q.options);
+  return { ...q, options, correct: options.indexOf(bonne) };
+}
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -229,7 +255,7 @@ function normalize(raw, type) {
     });
   }
   if (out.length === 0) throw new Error('no-valid-questions');
-  return out;
+  return out.map((q) => melangerOptions(q, type));
 }
 
 // ---------- Calcul mental : généré par du code, jamais par l'IA → réponses garanties justes ----------
@@ -280,9 +306,9 @@ export function generateMathQuestions({ count = 8, difficulty = 'medium' }) {
     // Distracteurs plausibles, uniques, jamais égaux à la bonne réponse
     const cands = [a + 1, a - 1, a + 2, a - 2, a + 10, a - 10, a * 2, Math.round(a / 2), a + 5, a - 5]
       .filter((x) => Number.isInteger(x) && x >= 0 && x !== a);
-    const distractors = [...new Set(cands)].sort(() => Math.random() - 0.5).slice(0, 3);
+    const distractors = melanger([...new Set(cands)]).slice(0, 3);
     if (distractors.length < 3) continue;
-    const options = [a, ...distractors].map(String).sort(() => Math.random() - 0.5);
+    const options = melanger([a, ...distractors].map(String));
     out.push({ question: q, options, correct: options.indexOf(String(a)), explanation: e });
   }
   return out;
@@ -542,7 +568,7 @@ export async function generateAnagramQuestions(env, { topic, count = 8, language
       distractors.push(d);
     }
     if (distractors.length < 3) continue;
-    const options = [word, ...distractors].sort(() => Math.random() - 0.5);
+    const options = melanger([word, ...distractors]);
     out.push({
       question: `Quel est le vrai mot caché dans ces lettres : ${shown.split('').join('-')} ?`,
       options,
