@@ -59,3 +59,25 @@ for (const [avant, apres] of expl) {
 }
 console.log(e4 === 0 ? '✅ explications débarrassées de « selon la source »' : `❌ ${e4} cas`);
 if (e4) process.exit(1);
+
+// 5. La question ne doit pas contenir sa propre réponse
+const normText2 = (s) => String(s).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'').replace(/[^a-z0-9]+/g,' ').trim();
+const dansEnonce = (question, reponse) => {
+  const r = normText2(reponse);
+  if (r.length < 3) return false;
+  const q = ` ${normText2(question)} `;
+  return q.includes(` ${r} `) || q.includes(` ${r}s `);
+};
+const cas5 = [
+  ['Quel est le prénom de la chanteuse Eva ?', 'Eva', true],
+  ['Quel est le nom du fleuve qui traverse Paris ?', 'La Seine', false],
+  ['Dans quelle ville se trouve la tour Eiffel ?', 'Paris', false],
+  ['Quelle est la capitale de la France, Paris ou Lyon ?', 'Paris', true],
+  ['Qui a peint la Joconde ?', 'Léonard de Vinci', false],
+  ['Combien de pattes a une araignée ?', 'Huit', false],
+  ['Quel groupe a chanté Bohemian Rhapsody ?', 'Queen', false],
+];
+let e5 = 0;
+for (const [q, r, att] of cas5) if (dansEnonce(q, r) !== att) { e5++; console.log('   ✗', q, '→', r); }
+console.log(e5 === 0 ? `✅ la réponse ne peut plus figurer dans l'énoncé (${cas5.length} cas)` : `❌ ${e5} cas`);
+if (e5) process.exit(1);

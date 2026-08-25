@@ -237,6 +237,20 @@ function nettoyerExplication(brut) {
   return cleanMath(propre.charAt(0).toUpperCase() + propre.slice(1));
 }
 
+// « Trouve l'intrus » et la chronologie énumèrent leurs propositions dans
+// l'énoncé : le contrôle ci-dessous n'y a pas de sens.
+const AVEC_OPTIONS_CITEES = new Set(['intru', 'chrono', 'mixed', 'anagram']);
+
+function reponseDansEnonce(question, reponse) {
+  const r = normText(reponse);
+  // La comparaison porte sur des MOTS ENTIERS : « Rome » ne déclenche donc pas
+  // sur « romantique ». Trois lettres suffisent — le cas qui a motivé ce
+  // contrôle était « Eva ».
+  if (r.length < 3) return false;
+  const q = ` ${normText(question)} `;
+  return q.includes(` ${r} `) || q.includes(` ${r}s `);
+}
+
 function normalize(raw, type) {
   if (!Array.isArray(raw)) throw new Error('not-array');
   const out = [];
@@ -280,6 +294,11 @@ function normalize(raw, type) {
     if (type === 'quote' && !/[«"“][^»"”]{8,}[»"”]/.test(q.question)) continue;
     if (QUESTION_DICTIONNAIRE.test(q.question)) continue;
     if (type === 'emoji' && (q.question.match(UN_EMOJI) || []).length < 2) continue;
+    // La question ne doit pas contenir sa propre réponse. Constaté en
+    // production : « Quel est le prénom de la chanteuse Eva ? », réponse
+    // « Eva ». Les styles où l'énoncé cite forcément les propositions
+    // (chronologie, intrus) sont épargnés.
+    if (!AVEC_OPTIONS_CITEES.has(type) && reponseDansEnonce(q.question, options[correct])) continue;
     // Anti-ambiguïté : aucune option ne doit être le doublon typographique d'une autre
     if (new Set(options.map(optionKey)).size !== options.length) continue;
     if (options.some((o) => !String(o).trim())) continue;
@@ -396,6 +415,14 @@ RÈGLES ABSOLUES :
    ✗ « Quel est le terme latin pour animal ? » ✗ « Qui a créé le taxon Animalia ? »
    ✓ « Quel animal peut dormir debout ? » ✓ « Combien de cœurs a une pieuvre ? »
 9. Chaque question doit être compréhensible SANS avoir lu la source.
+10. PAS DE FICHE D'ÉTAT CIVIL. Date de naissance, lieu de naissance, date de
+   sortie d'un single secondaire, nom du directeur artistique d'un morceau :
+   personne ne devine cela à table, et personne n'a envie d'essayer.
+   ✗ « Quelle est la date de naissance d'Eva ? » ✗ « Quel est le nom de son
+   premier album studio ? » ✓ « Quel chanteur a écrit "Mistral gagnant" ? »
+11. LA QUESTION NE DOIT JAMAIS CONTENIR SA PROPRE RÉPONSE.
+   ✗ « Quel est le prénom de la chanteuse Eva ? » avec « Eva » en réponse.
+${sources.length > 1 ? `12. RÉPARTIS les questions entre TOUTES les sources ci-dessus : au plus ${Math.max(1, Math.ceil(perBatch / sources.length))} question(s) sur un même article. Un quiz sur un sujet large ne doit pas se transformer en biographie d'une seule personne.` : ''}
 Difficulté : ${diff}.
 
 STYLE DE QUESTION DEMANDÉ : ${buildTypeRules(type)}
