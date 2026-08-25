@@ -386,10 +386,25 @@ app.post('/api/ai/generate', auth, async (c) => {
       c.env, busy ? 'moteur-sature' : 'creation',
       e.message, `sujet: ${String(topic || '').slice(0, 120)} · style: ${type} · ${count} questions`, user.id
     ));
+    // Le moteur est saturé, mais la banque contient peut-être déjà de quoi
+    // jouer sur ce sujet. Renvoyer une erreur sèche alors que des questions
+    // inédites attendent en base, c'est refuser de servir un plat déjà prêt.
+    if (fromBank.length >= 3) {
+      const servies = fromBank.slice(0, totalWanted);
+      c.executionCtx.waitUntil(markSeen(c.env, user.id, servies));
+      return c.json({
+        questions: servies.map(stripInternal),
+        sources: sourcesOf(servies),
+        verified: true,
+        alerte: busy
+          ? `La création de nouvelles questions est en pause jusqu'à demain (beaucoup de quiz aujourd'hui !). Voici ${servies.length} question(s) déjà prêtes sur ce sujet — et ce n'est pas décompté.`
+          : `La création a rencontré un incident, mais voici ${servies.length} question(s) déjà prêtes sur ce sujet — ce n'est pas décompté.`,
+      });
+    }
     if (busy) {
       return c.json({
         error: 'engine_busy',
-        message: "Beaucoup de quiz ont été créés aujourd'hui ! La création repart dans quelques heures. En attendant, tes quiz déjà enregistrés et les blind tests fonctionnent normalement.",
+        message: "Beaucoup de quiz ont été créés aujourd'hui ! La création de nouvelles questions repart demain. En attendant : tes quiz enregistrés, les blind tests, le calcul mental et les parties en direct fonctionnent normalement.",
       }, 503);
     }
     return c.json({ error: 'ai_failed', message: 'La création a échoué. Réessaie dans quelques secondes !' }, 502);
