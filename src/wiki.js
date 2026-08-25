@@ -82,7 +82,22 @@ function trierParPertinence(titres, sujet) {
     .map((x) => x.t);
 }
 
+// « Années 80 » désigne DEUX décennies dans une encyclopédie : les années 1980
+// et les années 80 après Jésus-Christ. Wikipédia range la seconde sous le titre
+// exact « Années 80 », qui l'emporte donc au classement par pertinence.
+//
+// Constaté en production : un quiz « Les années 80 » a produit « Qui est
+// crucifié à Hiérapolis en Phrygie ? » et « Qui est l'empereur romain de 81
+// à 96 ? ». Dans une application de soirée, une décennie à deux chiffres
+// désigne toujours le XXe ou le XXIe siècle.
+export function preciserDecennie(sujet) {
+  return String(sujet)
+    .replace(/\b(ann[ée]es?)\s+([5-9]0)\b/gi, (_, a, d) => `${a} 19${d}`)
+    .replace(/\b(ann[ée]es?)\s+([01]0)\b/gi, (_, a, d) => `${a} 20${d}`);
+}
+
 export async function wikiContext(env, topic, { maxArticles = 3, chars = 2000, deep = false } = {}) {
+  topic = preciserDecennie(topic);
   if (deep) { maxArticles = 6; chars = 7000; }
   const key = `wiki:${deep ? 'deep:' : ''}${normText(topic).slice(0, 80)}`;
   try {
