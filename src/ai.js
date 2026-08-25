@@ -106,6 +106,10 @@ ${typeRules}
 Ajoute pour chaque question une courte "explanation" (1 phrase, instructive ou drôle).
 Les questions doivent être variées, factuellement correctes, sans répétition, formulées de façon vivante.
 Pas de questions « de dictionnaire » : jamais de définition de mot, d'étymologie, de traduction latine, de nom de taxon ou de classification, ni de signification de sigle. On veut ce qu'un invité aurait envie de répondre à table.
+PAS DE FICHE D'ÉTAT CIVIL : ni date ou lieu de naissance, ni titre d'un album secondaire, ni nom d'un prix professionnel. ✗ « En quelle année Raphaël est-il né ? » ✓ « Qui chante "Caravane" ? »
+LA QUESTION NE DOIT JAMAIS CONTENIR SA PROPRE RÉPONSE.
+SUJET LARGE = VARIÉTÉ : au plus UNE question par personne, œuvre ou groupe. Cinq questions sur le même chanteur, ce n'est plus un quiz sur la chanson française, c'est sa biographie.
+PUBLIC FAMILIAL, ENFANTS COMPRIS : rien qui relève du contenu pour adultes — ni magazines de charme, ni sexualité, ni drogue, ni violence explicite. Sur « les années 80 », on veut les tubes, les films et les modes, pas les couvertures de Playboy.
 Pour toute notation mathématique, utilise UNIQUEMENT les symboles Unicode : ², ³, ×, ÷, √, π, ½ — jamais ^, **, ni notation LaTeX.
 Orthographe, accents et grammaire françaises impeccables.
 INTERDIT : proposer deux options qui pourraient être toutes les deux correctes (deux noms d'une même chose, deux graphies d'un même mot, une réponse contestée par les spécialistes). En cas de doute sur un fait, choisis une autre question.
@@ -225,6 +229,12 @@ const QUESTION_DICTIONNAIRE = /\btaxons?\b|\bnomenclature\b|\bsigle\b|\bacronyme
 // question dont l'énoncé était le seul caractère « ¡ ».
 const UN_EMOJI = /\p{Extended_Pictographic}/gu;
 
+// Quizzalo se joue en famille. La consigne « public familial » figure dans le
+// prompt depuis toujours ; elle n'a pas empêché un quiz « Les années 80 » de
+// sortir cinq questions sur les Playmates de Playboy. On ne se contente donc
+// plus de le demander.
+const CONTENU_ADULTE = /playboy|playmate|penthouse|hustler|\bporno?\b|pornograph|érotiqu|strip-?tease|topless|nu int[ée]gral|film x\b|hard-?core|prostitu|escort/i;
+
 // L'explication s'adresse à des invités, pas à un correcteur. Le modèle,
 // nourri d'extraits encyclopédiques, préfixait ses explications de « Selon la
 // source, … » : cette mécanique interne n'a rien à faire à l'écran.
@@ -293,6 +303,7 @@ function normalize(raw, type) {
     // regroupe l'ensemble des films comiques français », attribué à Max Linder.
     if (type === 'quote' && !/[«"“][^»"”]{8,}[»"”]/.test(q.question)) continue;
     if (QUESTION_DICTIONNAIRE.test(q.question)) continue;
+    if (CONTENU_ADULTE.test(`${q.question} ${(q.options || []).join(' ')} ${q.explanation || ''}`)) continue;
     if (type === 'emoji' && (q.question.match(UN_EMOJI) || []).length < 2) continue;
     // La question ne doit pas contenir sa propre réponse. Constaté en
     // production : « Quel est le prénom de la chanteuse Eva ? », réponse

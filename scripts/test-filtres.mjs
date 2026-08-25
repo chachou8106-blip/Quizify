@@ -81,3 +81,18 @@ let e5 = 0;
 for (const [q, r, att] of cas5) if (dansEnonce(q, r) !== att) { e5++; console.log('   ✗', q, '→', r); }
 console.log(e5 === 0 ? `✅ la réponse ne peut plus figurer dans l'énoncé (${cas5.length} cas)` : `❌ ${e5} cas`);
 if (e5) process.exit(1);
+
+// 6. Contenu réservé aux adultes : jamais dans une application de famille
+const CONTENU_ADULTE = /playboy|playmate|penthouse|hustler|\bporno?\b|pornograph|érotiqu|strip-?tease|topless|nu int[ée]gral|film x\b|hard-?core|prostitu|escort/i;
+const cas6 = [
+  ['Quel est le nom de la première Playmate of the Year des années 80 ?', true],
+  ['Quelle actrice a fait la couverture de Playboy en 1985 ?', true],
+  ['Quel film érotique a marqué les années 70 ?', true],
+  ['Quel groupe a chanté « Voyage, voyage » ?', false],
+  ['Quel film a marqué les années 80 ?', false],
+  ['Quelle est la capitale de l’Australie ?', false],
+];
+let e6 = 0;
+for (const [t, att] of cas6) if (CONTENU_ADULTE.test(t) !== att) { e6++; console.log('   ✗', t); }
+console.log(e6 === 0 ? `✅ contenu réservé aux adultes écarté (${cas6.length} cas)` : `❌ ${e6} cas`);
+if (e6) process.exit(1);
