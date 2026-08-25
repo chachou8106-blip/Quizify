@@ -53,6 +53,26 @@ const auth = requireAuth(secret);
 // l'attribution.
 const VERIFIABLE_TYPES = new Set(['multipleChoice', 'year', 'chrono', 'intru']);
 
+// Un sujet COLLECTIF ne correspond à aucun article d'encyclopédie.
+//
+// « Les capitales du monde », « Les chanteurs français », « Les célébrités
+// françaises » ne sont pas des entités : Wikipédia répond alors par l'article
+// le plus proche typographiquement, et le quiz entier part dessus. Constaté en
+// production, tout est authentique :
+//   « Les capitales du monde »      → une nouvelle d'Ernest Hemingway
+//                                      intitulée « La Capitale du monde » ;
+//   « Les célébrités françaises »   → cinq questions sur Adeline Blondieau ;
+//   « Les chanteurs français »      → la date de naissance d'Eva Queen ;
+//   « Les émissions de télévision » → l'horaire de diffusion d'« Infrarouge ».
+//
+// Sur ces sujets-là, la culture générale du moteur vaut mieux qu'un article
+// pris au hasard — et la contre-épreuve à l'aveugle veille sur l'exactitude.
+// « Harry Potter », « Le Tour de France », « La Révolution française » restent
+// ancrés dans leurs articles.
+function estUnSujetCollectif(sujet) {
+  return /^(les|des|mes|nos)\s+[\p{L}'’-]+(s|x)\b/iu.test(String(sujet || '').trim());
+}
+
 const FREE_AI_PER_MONTH = 3;
 const FREE_MAX_PLAYERS = 10;
 const PAID_MAX_PLAYERS = 100;
@@ -288,7 +308,7 @@ app.post('/api/ai/generate', auth, async (c) => {
       category, type, difficulty, language,
       personalFacts: personalFacts ? String(personalFacts).slice(0, 4000) : null,
     };
-    if (!personalFacts && VERIFIABLE_TYPES.has(type)) {
+    if (!personalFacts && VERIFIABLE_TYPES.has(type) && !estUnSujetCollectif(topic)) {
       // Contrôle complet : questions ancrées dans des articles réels, vérifiées
       // une à une.
       //
@@ -459,7 +479,7 @@ app.post('/api/ai/generate', auth, async (c) => {
       const avoid = merged.map((q) => `${q.question} → ${q.options[q.correct]}`);
       const need = (totalWanted - merged.length) + 2;
       let more;
-      if (VERIFIABLE_TYPES.has(type)) {
+      if (VERIFIABLE_TYPES.has(type) && !estUnSujetCollectif(topic)) {
         more = await generateVerifiedQuestions(c.env, {
           topic: String(topic || ''), count: need, difficulty, language, type,
           deep: true, avoid, maxAttempts: 2, skipJudge: true,
