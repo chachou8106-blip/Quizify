@@ -210,15 +210,26 @@ export default function Create() {
               <button onClick={() => generate()} disabled={loading} className="btn-ghost !px-4 !py-2 !text-sm">🔄 Régénérer</button>
             </div>
           </div>
-          {alerte && (
-            <div className="rounded-2xl border-2 border-sunny/60 bg-sunny/10 p-4">
-              <p className="font-display font-extrabold text-sunny">⚠️ Moins de questions que prévu</p>
-              <p className="mt-1 font-semibold text-white/70">{alerte}</p>
-              <button onClick={() => generate(topic, true)} disabled={loading} className="btn-ghost mt-3 !px-4 !py-2 !text-sm">
-                🔄 Relancer pour en obtenir plus
-              </button>
-            </div>
-          )}
+          {/* Deux situations très différentes portent un message : le quiz est
+              plus court que demandé (relancer peut aider), ou la création est en
+              pause pour la journée et ces questions viennent de la réserve
+              (relancer ne servirait à rien). */}
+          {alerte && (() => {
+            const enPause = /en pause/i.test(alerte);
+            return (
+              <div className={`rounded-2xl border-2 p-4 ${enPause ? 'border-sky2/60 bg-sky2/10' : 'border-sunny/60 bg-sunny/10'}`}>
+                <p className={`font-display font-extrabold ${enPause ? 'text-sky2-light' : 'text-sunny'}`}>
+                  {enPause ? '🎁 Des questions étaient déjà prêtes' : '⚠️ Moins de questions que prévu'}
+                </p>
+                <p className="mt-1 font-semibold text-white/70">{alerte}</p>
+                {!enPause && (
+                  <button onClick={() => generate(topic, true)} disabled={loading} className="btn-ghost mt-3 !px-4 !py-2 !text-sm">
+                    🔄 Relancer pour en obtenir plus
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {sources && sources.length > 0 && (
             <div className="rounded-2xl border-2 border-minty/40 bg-minty/10 p-4">
               <p className="font-display font-extrabold text-minty">📚 Pour aller plus loin</p>
